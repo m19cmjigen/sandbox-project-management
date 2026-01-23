@@ -1,0 +1,57 @@
+erDiagram
+    Organizations ||--o{ Organizations : "parent-child"
+    Organizations ||--o{ Projects : "owns"
+    Projects ||--o{ Issues : "contains"
+
+    Organizations {
+        bigserial id PK
+        varchar name
+        bigint parent_id FK
+        varchar path
+        integer level
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    Projects {
+        bigserial id PK
+        varchar jira_project_id UK
+        varchar key
+        varchar name
+        varchar lead_account_id
+        varchar lead_email
+        bigint organization_id FK
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    Issues {
+        bigserial id PK
+        varchar jira_issue_id UK
+        varchar jira_issue_key
+        bigint project_id FK
+        text summary
+        varchar status
+        varchar status_category
+        date due_date
+        varchar assignee_name
+        varchar assignee_account_id
+        varchar delay_status
+        varchar priority
+        varchar issue_type
+        timestamp last_updated_at
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    SyncLogs {
+        bigserial id PK
+        varchar sync_type
+        timestamp executed_at
+        timestamp completed_at
+        varchar status
+        integer projects_synced
+        integer issues_synced
+        text error_message
+        integer duration_seconds
+    }
