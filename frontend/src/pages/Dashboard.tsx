@@ -10,6 +10,7 @@ import { dashboardService } from '@/services/dashboardService'
 import Loading from '@/components/Loading'
 import ErrorMessage from '@/components/ErrorMessage'
 import ProjectCard from '@/components/ProjectCard'
+import ProjectHeatmap from '@/components/ProjectHeatmap'
 
 export default function Dashboard() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
@@ -137,6 +138,14 @@ export default function Dashboard() {
           </Card>
         </Grid>
       </Grid>
+
+      {/* ヒートマップ */}
+      <Box sx={{ mb: 4 }}>
+        <ProjectHeatmap
+          projects={summary.projects_by_status || []}
+          title="プロジェクトヒートマップ"
+        />
+      </Box>
 
       {/* プロジェクト一覧 */}
       <Typography variant="h6" gutterBottom>
