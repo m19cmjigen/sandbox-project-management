@@ -1,5 +1,6 @@
 .PHONY: help db-up db-down db-migrate db-rollback db-version db-force db-migration db-drop db-create db-reset \
-        backend-run backend-build backend-test backend-lint backend-fmt backend-deps backend-clean
+        backend-run backend-build backend-test backend-lint backend-fmt backend-deps backend-clean \
+        sync-once sync-scheduler sync-build
 
 # デフォルトのデータベースURL（環境変数で上書き可能）
 DATABASE_URL ?= postgres://admin:admin123@localhost:5432/project_visualization?sslmode=disable
@@ -28,6 +29,11 @@ help:
 	@echo "  make backend-fmt    - バックエンドのフォーマットを実行"
 	@echo "  make backend-deps   - バックエンドの依存関係を更新"
 	@echo "  make backend-clean  - バックエンドのビルド成果物を削除"
+	@echo ""
+	@echo "Jira同期:"
+	@echo "  make sync-once      - Jira同期を1回実行"
+	@echo "  make sync-scheduler - Jira同期をスケジューラーモードで実行"
+	@echo "  make sync-build     - 同期CLIツールをビルド"
 	@echo ""
 	@echo "Docker Compose:"
 	@echo "  make up             - すべてのサービスを起動"
@@ -180,3 +186,24 @@ logs-backend:
 # PostgreSQLのログを表示
 logs-db:
 	docker-compose logs -f postgres
+
+# =====================================
+# Jira同期コマンド
+# =====================================
+
+# 同期CLIツールのビルド
+sync-build:
+	@echo "同期CLIツールをビルド中..."
+	cd $(BACKEND_DIR) && go build -o bin/sync cmd/sync/main.go
+	@echo "ビルド完了: backend/bin/sync"
+
+# Jira同期を1回実行
+sync-once:
+	@echo "Jira同期を実行中（1回のみ）..."
+	cd $(BACKEND_DIR) && go run cmd/sync/main.go -mode=once -org-id=1
+
+# Jira同期をスケジューラーモードで実行
+sync-scheduler:
+	@echo "Jira同期をスケジューラーモードで実行中..."
+	@echo "同期間隔: 1時間"
+	cd $(BACKEND_DIR) && go run cmd/sync/main.go -mode=scheduler -org-id=1 -interval=1h
