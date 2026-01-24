@@ -14,6 +14,9 @@ type ProjectRepository interface {
 	// FindByID はIDでプロジェクトを取得
 	FindByID(ctx context.Context, id int64) (*domain.Project, error)
 
+	// GetByKey はプロジェクトキー(例: PROJ)で取得
+	GetByKey(ctx context.Context, key string) (*domain.Project, error)
+
 	// FindByJiraProjectID はJiraプロジェクトIDで取得
 	FindByJiraProjectID(ctx context.Context, jiraProjectID string) (*domain.Project, error)
 

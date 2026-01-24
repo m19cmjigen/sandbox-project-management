@@ -17,6 +17,9 @@ type IssueRepository interface {
 	// FindByJiraIssueID はJiraチケットIDで取得
 	FindByJiraIssueID(ctx context.Context, jiraIssueID string) (*domain.Issue, error)
 
+	// GetByJiraKey はJiraキー(例: PROJ-123)でチケットを取得
+	GetByJiraKey(ctx context.Context, jiraKey string) (*domain.Issue, error)
+
 	// FindByProjectID はプロジェクトIDでチケットを取得
 	FindByProjectID(ctx context.Context, projectID int64) ([]domain.Issue, error)
 

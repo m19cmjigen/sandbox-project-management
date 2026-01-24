@@ -79,6 +79,26 @@ func (r *issueRepository) FindByJiraIssueID(ctx context.Context, jiraIssueID str
 	return &issue, nil
 }
 
+// GetByJiraKey はJiraキー(例: PROJ-123)でチケットを取得
+func (r *issueRepository) GetByJiraKey(ctx context.Context, jiraKey string) (*domain.Issue, error) {
+	var issue domain.Issue
+	query := `
+		SELECT id, jira_issue_id, jira_issue_key, project_id, summary, status,
+		       status_category, due_date, assignee_name, assignee_account_id,
+		       delay_status, priority, issue_type, last_updated_at, created_at, updated_at
+		FROM issues
+		WHERE jira_issue_key = $1
+	`
+	err := r.db.GetContext(ctx, &issue, query, jiraKey)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find issue by jira_key %s: %w", jiraKey, err)
+	}
+	return &issue, nil
+}
+
 // FindByProjectID はプロジェクトIDでチケットを取得
 func (r *issueRepository) FindByProjectID(ctx context.Context, projectID int64) ([]domain.Issue, error) {
 	var issues []domain.Issue

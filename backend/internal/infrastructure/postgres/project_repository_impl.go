@@ -56,6 +56,25 @@ func (r *projectRepository) FindByID(ctx context.Context, id int64) (*domain.Pro
 	return &project, nil
 }
 
+// GetByKey はプロジェクトキー(例: PROJ)で取得
+func (r *projectRepository) GetByKey(ctx context.Context, key string) (*domain.Project, error) {
+	var project domain.Project
+	query := `
+		SELECT id, jira_project_id, key, name, lead_account_id, lead_email,
+		       organization_id, created_at, updated_at
+		FROM projects
+		WHERE key = $1
+	`
+	err := r.db.GetContext(ctx, &project, query, key)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find project by key %s: %w", key, err)
+	}
+	return &project, nil
+}
+
 // FindByJiraProjectID はJiraプロジェクトIDで取得
 func (r *projectRepository) FindByJiraProjectID(ctx context.Context, jiraProjectID string) (*domain.Project, error) {
 	var project domain.Project
