@@ -7,6 +7,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/zap"
 
+	"github.com/m19cmjigen/sandbox-project-management/backend/internal/infrastructure/jira"
 	"github.com/m19cmjigen/sandbox-project-management/backend/internal/infrastructure/postgres"
 	"github.com/m19cmjigen/sandbox-project-management/backend/internal/interface/handler"
 	"github.com/m19cmjigen/sandbox-project-management/backend/internal/usecase"
@@ -30,6 +31,7 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 	orgRepo := postgres.NewOrganizationRepository(db)
 	projectRepo := postgres.NewProjectRepository(db)
 	issueRepo := postgres.NewIssueRepository(db)
+	syncLogRepo := postgres.NewSyncLogRepository(db)
 
 	// ユースケースの初期化
 	orgUsecase := usecase.NewOrganizationUsecase(orgRepo)
@@ -37,11 +39,27 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 	issueUsecase := usecase.NewIssueUsecase(issueRepo)
 	dashboardUsecase := usecase.NewDashboardUsecase(orgRepo, projectRepo, issueRepo)
 
+	// Jira統合（環境変数から設定を読み込み）
+	var syncUsecase usecase.SyncUsecase
+	jiraConfig, err := jira.LoadConfig()
+	if err == nil {
+		jiraClient := jira.NewClient(jiraConfig)
+		syncUsecase = usecase.NewSyncUsecaseWithRetry(jiraClient, projectRepo, issueRepo, syncLogRepo, nil)
+		log.Info("Jira integration enabled")
+	} else {
+		log.Warn("Jira integration disabled", zap.Error(err))
+	}
+
 	// ハンドラーの初期化
 	orgHandler := handler.NewOrganizationHandler(orgUsecase, log)
 	projectHandler := handler.NewProjectHandler(projectUsecase, log)
 	issueHandler := handler.NewIssueHandler(issueUsecase, log)
 	dashboardHandler := handler.NewDashboardHandler(dashboardUsecase, log)
+
+	var syncHandler *handler.SyncHandler
+	if syncUsecase != nil {
+		syncHandler = handler.NewSyncHandler(syncUsecase)
+	}
 
 	// ヘルスチェックエンドポイント
 	r.GET("/health", healthCheckHandler(db))
@@ -84,6 +102,15 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 			dashboard.GET("/summary", dashboardHandler.GetDashboardSummary)
 			dashboard.GET("/organizations/:id", dashboardHandler.GetOrganizationSummary)
 			dashboard.GET("/projects/:id", dashboardHandler.GetProjectSummary)
+		}
+
+		// Jira同期（Jira統合が有効な場合のみ）
+		if syncHandler != nil {
+			sync := v1.Group("/sync")
+			{
+				sync.POST("/trigger", syncHandler.TriggerSync)
+				sync.POST("/projects/:id", syncHandler.SyncProject)
+			}
 		}
 	}
 
