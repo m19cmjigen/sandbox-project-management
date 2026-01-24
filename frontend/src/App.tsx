@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import Organizations from './pages/Organizations'
 import Projects from './pages/Projects'
 import Issues from './pages/Issues'
+import Admin from './pages/Admin'
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
           <Route path="/organizations" element={<Organizations />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/issues" element={<Issues />} />
+          <Route path="/admin" element={<Admin />} />
         </Routes>
       </Layout>
     </Box>

@@ -2,8 +2,8 @@ import apiClient from './api'
 import { Project, ProjectWithStats } from '@/types'
 
 export const projectService = {
-  // プロジェクト一覧を取得
-  async getAll(withStats = false): Promise<Project[] | ProjectWithStats[]> {
+  // プロジェクト一覧を取得（デフォルトで統計情報付き）
+  async getAll(withStats = true): Promise<ProjectWithStats[]> {
     const response = await apiClient.get('/projects', {
       params: { with_stats: withStats },
     })
