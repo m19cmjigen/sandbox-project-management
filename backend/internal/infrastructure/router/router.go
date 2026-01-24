@@ -7,6 +7,9 @@ import (
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/zap"
 
+	"github.com/m19cmjigen/sandbox-project-management/backend/internal/infrastructure/postgres"
+	"github.com/m19cmjigen/sandbox-project-management/backend/internal/interface/handler"
+	"github.com/m19cmjigen/sandbox-project-management/backend/internal/usecase"
 	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/config"
 	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/logger"
 )
@@ -23,6 +26,17 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 	r.Use(LoggerMiddleware(log))
 	r.Use(CORSMiddleware())
 
+	// リポジトリの初期化
+	orgRepo := postgres.NewOrganizationRepository(db)
+	projectRepo := postgres.NewProjectRepository(db)
+	issueRepo := postgres.NewIssueRepository(db)
+
+	// ユースケースの初期化
+	orgUsecase := usecase.NewOrganizationUsecase(orgRepo)
+
+	// ハンドラーの初期化
+	orgHandler := handler.NewOrganizationHandler(orgUsecase, log)
+
 	// ヘルスチェックエンドポイント
 	r.GET("/health", healthCheckHandler(db))
 	r.GET("/ready", readinessCheckHandler(db))
@@ -33,37 +47,38 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 		// 組織管理
 		organizations := v1.Group("/organizations")
 		{
-			organizations.GET("", listOrganizationsHandler)
-			organizations.GET("/:id", getOrganizationHandler)
-			organizations.POST("", createOrganizationHandler)
-			organizations.PUT("/:id", updateOrganizationHandler)
-			organizations.DELETE("/:id", deleteOrganizationHandler)
-			organizations.GET("/:id/children", getChildOrganizationsHandler)
+			organizations.GET("", orgHandler.ListOrganizations)
+			organizations.GET("/tree", orgHandler.GetOrganizationTree)
+			organizations.GET("/:id", orgHandler.GetOrganization)
+			organizations.POST("", orgHandler.CreateOrganization)
+			organizations.PUT("/:id", orgHandler.UpdateOrganization)
+			organizations.DELETE("/:id", orgHandler.DeleteOrganization)
+			organizations.GET("/:id/children", orgHandler.GetOrganizationChildren)
 		}
 
 		// プロジェクト管理
 		projects := v1.Group("/projects")
 		{
-			projects.GET("", listProjectsHandler)
-			projects.GET("/:id", getProjectHandler)
-			projects.PUT("/:id", updateProjectHandler)
-			projects.PUT("/:id/organization", assignProjectToOrganizationHandler)
-			projects.GET("/:id/issues", listProjectIssuesHandler)
+			projects.GET("", listProjectsHandler(projectRepo))
+			projects.GET("/:id", getProjectHandler(projectRepo))
+			projects.PUT("/:id", updateProjectHandler(projectRepo))
+			projects.PUT("/:id/organization", assignProjectToOrganizationHandler(projectRepo))
+			projects.GET("/:id/issues", listProjectIssuesHandler(issueRepo))
 		}
 
 		// チケット管理
 		issues := v1.Group("/issues")
 		{
-			issues.GET("", listIssuesHandler)
-			issues.GET("/:id", getIssueHandler)
+			issues.GET("", listIssuesHandler(issueRepo))
+			issues.GET("/:id", getIssueHandler(issueRepo))
 		}
 
 		// ダッシュボード
 		dashboard := v1.Group("/dashboard")
 		{
-			dashboard.GET("/summary", getDashboardSummaryHandler)
-			dashboard.GET("/organizations/:id", getOrganizationSummaryHandler)
-			dashboard.GET("/projects/:id", getProjectSummaryHandler)
+			dashboard.GET("/summary", getDashboardSummaryHandler(projectRepo))
+			dashboard.GET("/organizations/:id", getOrganizationSummaryHandler(orgRepo, projectRepo))
+			dashboard.GET("/projects/:id", getProjectSummaryHandler(projectRepo))
 		}
 	}
 
@@ -73,11 +88,6 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 // LoggerMiddleware はリクエストログを出力するミドルウェア
 func LoggerMiddleware(log *logger.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		start := c.Request.Context().Value("start")
-		if start == nil {
-			start = c.GetTime("start")
-		}
-
 		c.Next()
 
 		log.Info("Request processed",
@@ -85,7 +95,6 @@ func LoggerMiddleware(log *logger.Logger) gin.HandlerFunc {
 			zap.String("path", c.Request.URL.Path),
 			zap.Int("status", c.Writer.Status()),
 			zap.String("ip", c.ClientIP()),
-			zap.String("user_agent", c.Request.UserAgent()),
 		)
 	}
 }
@@ -111,7 +120,7 @@ func CORSMiddleware() gin.HandlerFunc {
 func healthCheckHandler(db *sqlx.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"status": "ok",
+			"status":  "ok",
 			"service": "project-visualization-api",
 		})
 	}
@@ -130,74 +139,70 @@ func readinessCheckHandler(db *sqlx.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"status": "ready",
+			"status":   "ready",
 			"database": "connected",
 		})
 	}
 }
 
-// 以下はプレースホルダーハンドラー（実装は後続チケットで行う）
+// 以下はプレースホルダーハンドラー（BACK-004以降で実装）
 
-func listOrganizationsHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "list organizations - not implemented yet"})
+func listProjectsHandler(repo interface{}) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "list projects - not implemented yet"})
+	}
 }
 
-func getOrganizationHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "get organization - not implemented yet"})
+func getProjectHandler(repo interface{}) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "get project - not implemented yet"})
+	}
 }
 
-func createOrganizationHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "create organization - not implemented yet"})
+func updateProjectHandler(repo interface{}) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "update project - not implemented yet"})
+	}
 }
 
-func updateOrganizationHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "update organization - not implemented yet"})
+func assignProjectToOrganizationHandler(repo interface{}) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "assign project to organization - not implemented yet"})
+	}
 }
 
-func deleteOrganizationHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "delete organization - not implemented yet"})
+func listProjectIssuesHandler(repo interface{}) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "list project issues - not implemented yet"})
+	}
 }
 
-func getChildOrganizationsHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "get child organizations - not implemented yet"})
+func listIssuesHandler(repo interface{}) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "list issues - not implemented yet"})
+	}
 }
 
-func listProjectsHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "list projects - not implemented yet"})
+func getIssueHandler(repo interface{}) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "get issue - not implemented yet"})
+	}
 }
 
-func getProjectHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "get project - not implemented yet"})
+func getDashboardSummaryHandler(repo interface{}) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "get dashboard summary - not implemented yet"})
+	}
 }
 
-func updateProjectHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "update project - not implemented yet"})
+func getOrganizationSummaryHandler(orgRepo, projRepo interface{}) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "get organization summary - not implemented yet"})
+	}
 }
 
-func assignProjectToOrganizationHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "assign project to organization - not implemented yet"})
-}
-
-func listProjectIssuesHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "list project issues - not implemented yet"})
-}
-
-func listIssuesHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "list issues - not implemented yet"})
-}
-
-func getIssueHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "get issue - not implemented yet"})
-}
-
-func getDashboardSummaryHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "get dashboard summary - not implemented yet"})
-}
-
-func getOrganizationSummaryHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "get organization summary - not implemented yet"})
-}
-
-func getProjectSummaryHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "get project summary - not implemented yet"})
+func getProjectSummaryHandler(repo interface{}) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "get project summary - not implemented yet"})
+	}
 }
