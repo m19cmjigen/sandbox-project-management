@@ -11,6 +11,11 @@ import {
   ListItemText,
   Toolbar,
   Typography,
+  Avatar,
+  Menu,
+  MenuItem,
+  Divider,
+  Chip,
 } from '@mui/material'
 import {
   Menu as MenuIcon,
@@ -19,8 +24,11 @@ import {
   Folder as FolderIcon,
   BugReport as BugReportIcon,
   Settings as SettingsIcon,
+  AccountCircle as AccountCircleIcon,
+  Logout as LogoutIcon,
 } from '@mui/icons-material'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 
 const drawerWidth = 240
 
@@ -38,11 +46,52 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const navigate = useNavigate()
   const location = useLocation()
+  const { user, logout } = useAuth()
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen)
+  }
+
+  const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget)
+  }
+
+  const handleUserMenuClose = () => {
+    setAnchorEl(null)
+  }
+
+  const handleLogout = () => {
+    handleUserMenuClose()
+    logout()
+  }
+
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case 'admin':
+        return 'error'
+      case 'manager':
+        return 'warning'
+      case 'viewer':
+        return 'info'
+      default:
+        return 'default'
+    }
+  }
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'admin':
+        return '管理者'
+      case 'manager':
+        return 'マネージャー'
+      case 'viewer':
+        return '閲覧者'
+      default:
+        return role
+    }
   }
 
   const drawer = (
@@ -87,9 +136,58 @@ export default function Layout({ children }: LayoutProps) {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div">
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             全社プロジェクト進捗可視化プラットフォーム
           </Typography>
+
+          {/* User menu */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Chip
+              label={getRoleLabel(user?.role || '')}
+              color={getRoleColor(user?.role || '')}
+              size="small"
+              sx={{ display: { xs: 'none', sm: 'flex' } }}
+            />
+            <IconButton
+              size="large"
+              aria-label="account of current user"
+              aria-controls="user-menu"
+              aria-haspopup="true"
+              onClick={handleUserMenuOpen}
+              color="inherit"
+            >
+              <AccountCircleIcon />
+            </IconButton>
+          </Box>
+
+          <Menu
+            id="user-menu"
+            anchorEl={anchorEl}
+            open={Boolean(anchorEl)}
+            onClose={handleUserMenuClose}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'right',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'right',
+            }}
+          >
+            <Box sx={{ px: 2, py: 1 }}>
+              <Typography variant="subtitle2">{user?.username}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {user?.email}
+              </Typography>
+            </Box>
+            <Divider />
+            <MenuItem onClick={handleLogout}>
+              <ListItemIcon>
+                <LogoutIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>ログアウト</ListItemText>
+            </MenuItem>
+          </Menu>
         </Toolbar>
       </AppBar>
       <Box
