@@ -5,15 +5,15 @@ import (
 	"log"
 
 	"github.com/m19cmjigen/sandbox-project-management/backend/internal/domain"
-	"github.com/m19cmjigen/sandbox-project-management/backend/internal/infrastructure/batch"
 	"github.com/m19cmjigen/sandbox-project-management/backend/internal/infrastructure/jira"
 	"github.com/m19cmjigen/sandbox-project-management/backend/internal/interface/repository"
+	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/retry"
 )
 
 // SyncUsecaseWithRetry wraps SyncUsecase with retry logic
 type SyncUsecaseWithRetry struct {
 	baseUsecase SyncUsecase
-	retryConfig *batch.RetryConfig
+	retryConfig *retry.RetryConfig
 }
 
 // NewSyncUsecaseWithRetry creates a new sync usecase with retry capability
@@ -22,10 +22,10 @@ func NewSyncUsecaseWithRetry(
 	projectRepo repository.ProjectRepository,
 	issueRepo repository.IssueRepository,
 	syncLogRepo repository.SyncLogRepository,
-	retryConfig *batch.RetryConfig,
+	retryConfig *retry.RetryConfig,
 ) SyncUsecase {
 	if retryConfig == nil {
-		retryConfig = batch.DefaultRetryConfig()
+		retryConfig = retry.DefaultRetryConfig()
 	}
 
 	baseUsecase := NewSyncUsecase(jiraClient, projectRepo, issueRepo, syncLogRepo)
@@ -41,13 +41,13 @@ func (u *SyncUsecaseWithRetry) SyncAllProjects(ctx context.Context, organization
 	var result *domain.SyncLog
 	var syncErr error
 
-	err := batch.WithRetry(ctx, u.retryConfig, "SyncAllProjects", func(ctx context.Context) error {
+	err := retry.WithRetry(ctx, u.retryConfig, "SyncAllProjects", func(ctx context.Context) error {
 		syncLog, err := u.baseUsecase.SyncAllProjects(ctx, organizationID)
 		result = syncLog
 		syncErr = err
 
 		// Only retry if it's a retryable error
-		if err != nil && batch.IsRetryableError(err) {
+		if err != nil && retry.IsRetryableError(err) {
 			return err
 		}
 
@@ -66,11 +66,11 @@ func (u *SyncUsecaseWithRetry) SyncAllProjects(ctx context.Context, organization
 
 // SyncProjectIssues synchronizes project issues with retry
 func (u *SyncUsecaseWithRetry) SyncProjectIssues(ctx context.Context, projectID int64) error {
-	return batch.WithRetry(ctx, u.retryConfig, "SyncProjectIssues", func(ctx context.Context) error {
+	return retry.WithRetry(ctx, u.retryConfig, "SyncProjectIssues", func(ctx context.Context) error {
 		err := u.baseUsecase.SyncProjectIssues(ctx, projectID)
 
 		// Only retry if it's a retryable error
-		if err != nil && batch.IsRetryableError(err) {
+		if err != nil && retry.IsRetryableError(err) {
 			return err
 		}
 

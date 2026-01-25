@@ -13,6 +13,7 @@ type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
 	Log      LogConfig
+	JWT      JWTConfig
 }
 
 // ServerConfig はサーバー設定
@@ -37,6 +38,12 @@ type LogConfig struct {
 	Format string
 }
 
+// JWTConfig はJWT認証設定
+type JWTConfig struct {
+	SecretKey       string
+	ExpirationHours int
+}
+
 // Load は環境変数から設定を読み込む
 func Load() (*Config, error) {
 	// .envファイルを読み込み（存在しない場合は無視）
@@ -45,6 +52,11 @@ func Load() (*Config, error) {
 	dbPort, err := strconv.Atoi(getEnv("DB_PORT", "5432"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid DB_PORT: %w", err)
+	}
+
+	jwtExpirationHours, err := strconv.Atoi(getEnv("JWT_EXPIRATION_HOURS", "24"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid JWT_EXPIRATION_HOURS: %w", err)
 	}
 
 	config := &Config{
@@ -63,6 +75,10 @@ func Load() (*Config, error) {
 		Log: LogConfig{
 			Level:  getEnv("LOG_LEVEL", "debug"),
 			Format: getEnv("LOG_FORMAT", "json"),
+		},
+		JWT: JWTConfig{
+			SecretKey:       getEnv("JWT_SECRET_KEY", "your-secret-key-change-in-production"),
+			ExpirationHours: jwtExpirationHours,
 		},
 	}
 

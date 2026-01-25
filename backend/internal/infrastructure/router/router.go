@@ -7,8 +7,11 @@ import (
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/zap"
 
+	"github.com/m19cmjigen/sandbox-project-management/backend/internal/infrastructure/auth"
 	"github.com/m19cmjigen/sandbox-project-management/backend/internal/infrastructure/jira"
 	"github.com/m19cmjigen/sandbox-project-management/backend/internal/infrastructure/postgres"
+	httpHandler "github.com/m19cmjigen/sandbox-project-management/backend/internal/interface/http"
+	"github.com/m19cmjigen/sandbox-project-management/backend/internal/interface/http/middleware"
 	"github.com/m19cmjigen/sandbox-project-management/backend/internal/interface/handler"
 	"github.com/m19cmjigen/sandbox-project-management/backend/internal/usecase"
 	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/config"
@@ -32,8 +35,17 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 	projectRepo := postgres.NewProjectRepository(db)
 	issueRepo := postgres.NewIssueRepository(db)
 	syncLogRepo := postgres.NewSyncLogRepository(db)
+	userRepo := postgres.NewUserRepository(db)
+
+	// 認証サービスの初期化
+	jwtService := auth.NewJWTService(auth.JWTConfig{
+		SecretKey:       cfg.JWT.SecretKey,
+		ExpirationHours: cfg.JWT.ExpirationHours,
+	})
+	passwordService := auth.NewPasswordService()
 
 	// ユースケースの初期化
+	authUsecase := usecase.NewAuthUsecase(userRepo, jwtService, passwordService)
 	orgUsecase := usecase.NewOrganizationUsecase(orgRepo)
 	projectUsecase := usecase.NewProjectUsecase(projectRepo)
 	issueUsecase := usecase.NewIssueUsecase(issueRepo)
@@ -51,6 +63,7 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 	}
 
 	// ハンドラーの初期化
+	authHandler := httpHandler.NewAuthHandler(authUsecase)
 	orgHandler := handler.NewOrganizationHandler(orgUsecase, log)
 	projectHandler := handler.NewProjectHandler(projectUsecase, log)
 	issueHandler := handler.NewIssueHandler(issueUsecase, log)

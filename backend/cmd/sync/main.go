@@ -15,6 +15,7 @@ import (
 	"github.com/m19cmjigen/sandbox-project-management/backend/internal/infrastructure/jira"
 	"github.com/m19cmjigen/sandbox-project-management/backend/internal/infrastructure/postgres"
 	"github.com/m19cmjigen/sandbox-project-management/backend/internal/usecase"
+	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/retry"
 )
 
 func main() {
@@ -58,7 +59,7 @@ func main() {
 	jiraClient := jira.NewClient(jiraConfig)
 
 	// Sync Usecaseの初期化（リトライ機能付き）
-	retryConfig := batch.DefaultRetryConfig()
+	retryConfig := retry.DefaultRetryConfig()
 	syncUsecase := usecase.NewSyncUsecaseWithRetry(
 		jiraClient,
 		projectRepo,
