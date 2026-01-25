@@ -37,6 +37,8 @@ import OrganizationForm, {
   OrganizationFormData,
 } from '@/components/OrganizationForm'
 import ProjectAssignmentForm from '@/components/ProjectAssignmentForm'
+import SyncTrigger from '@/components/SyncTrigger'
+import SyncHistory from '@/components/SyncHistory'
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState(0)
@@ -148,6 +150,7 @@ export default function Admin() {
         <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
           <Tab label="組織管理" />
           <Tab label="プロジェクト割り当て" />
+          <Tab label="Jira同期" />
         </Tabs>
       </Box>
 
@@ -269,6 +272,16 @@ export default function Admin() {
             </TableContainer>
           </CardContent>
         </Card>
+      )}
+
+      {/* Jira同期タブ */}
+      {activeTab === 2 && (
+        <Box>
+          <Box sx={{ mb: 3 }}>
+            <SyncTrigger />
+          </Box>
+          <SyncHistory />
+        </Box>
       )}
 
       {/* 組織フォーム */}

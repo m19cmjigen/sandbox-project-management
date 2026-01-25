@@ -58,7 +58,7 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 
 	var syncHandler *handler.SyncHandler
 	if syncUsecase != nil {
-		syncHandler = handler.NewSyncHandler(syncUsecase)
+		syncHandler = handler.NewSyncHandler(syncUsecase, syncLogRepo)
 	}
 
 	// ヘルスチェックエンドポイント
@@ -110,6 +110,9 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 			{
 				sync.POST("/trigger", syncHandler.TriggerSync)
 				sync.POST("/projects/:id", syncHandler.SyncProject)
+				sync.GET("/logs", syncHandler.GetSyncLogs)
+				sync.GET("/logs/latest", syncHandler.GetLatestSyncLog)
+				sync.GET("/logs/:id", syncHandler.GetSyncLog)
 			}
 		}
 	}
