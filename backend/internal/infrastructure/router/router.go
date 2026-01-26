@@ -81,51 +81,78 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 	// API v1 ルートグループ
 	v1 := r.Group("/api/v1")
 	{
-		// 組織管理
-		organizations := v1.Group("/organizations")
+		// 認証エンドポイント（認証不要）
+		auth := v1.Group("/auth")
 		{
-			organizations.GET("", orgHandler.ListOrganizations)
-			organizations.GET("/tree", orgHandler.GetOrganizationTree)
-			organizations.GET("/:id", orgHandler.GetOrganization)
-			organizations.POST("", orgHandler.CreateOrganization)
-			organizations.PUT("/:id", orgHandler.UpdateOrganization)
-			organizations.DELETE("/:id", orgHandler.DeleteOrganization)
-			organizations.GET("/:id/children", orgHandler.GetOrganizationChildren)
+			auth.POST("/login", authHandler.Login)
+			auth.POST("/refresh", authHandler.RefreshToken)
+			auth.GET("/me", middleware.AuthMiddleware(authUsecase), authHandler.GetCurrentUser)
 		}
 
-		// プロジェクト管理
-		projects := v1.Group("/projects")
+		// ユーザー管理（管理者のみ）
+		users := v1.Group("/users", middleware.AuthMiddleware(authUsecase))
 		{
-			projects.GET("", projectHandler.ListProjects)
-			projects.GET("/:id", projectHandler.GetProject)
-			projects.PUT("/:id/organization", projectHandler.AssignProjectToOrganization)
-			projects.GET("/:id/issues", issueHandler.ListProjectIssues)
+			users.GET("", middleware.RequireAdmin(), authHandler.ListUsers)
+			users.POST("", middleware.RequireAdmin(), authHandler.CreateUser)
+			users.GET("/:id", authHandler.GetUser)
+			users.PUT("/:id", middleware.RequireAdmin(), authHandler.UpdateUser)
+			users.DELETE("/:id", middleware.RequireAdmin(), authHandler.DeleteUser)
+			users.POST("/:id/password", authHandler.ChangePassword)
 		}
 
-		// チケット管理
-		issues := v1.Group("/issues")
+		// 認証が必要な保護されたルート
+		protected := v1.Group("", middleware.AuthMiddleware(authUsecase))
 		{
-			issues.GET("", issueHandler.ListIssues)
-			issues.GET("/:id", issueHandler.GetIssue)
-		}
-
-		// ダッシュボード
-		dashboard := v1.Group("/dashboard")
-		{
-			dashboard.GET("/summary", dashboardHandler.GetDashboardSummary)
-			dashboard.GET("/organizations/:id", dashboardHandler.GetOrganizationSummary)
-			dashboard.GET("/projects/:id", dashboardHandler.GetProjectSummary)
-		}
-
-		// Jira同期（Jira統合が有効な場合のみ）
-		if syncHandler != nil {
-			sync := v1.Group("/sync")
+			// 組織管理（読み取りは全員、変更はマネージャー以上）
+			organizations := protected.Group("/organizations")
 			{
-				sync.POST("/trigger", syncHandler.TriggerSync)
-				sync.POST("/projects/:id", syncHandler.SyncProject)
-				sync.GET("/logs", syncHandler.GetSyncLogs)
-				sync.GET("/logs/latest", syncHandler.GetLatestSyncLog)
-				sync.GET("/logs/:id", syncHandler.GetSyncLog)
+				organizations.GET("", orgHandler.ListOrganizations)
+				organizations.GET("/tree", orgHandler.GetOrganizationTree)
+				organizations.GET("/:id", orgHandler.GetOrganization)
+				organizations.GET("/:id/children", orgHandler.GetOrganizationChildren)
+
+				// 変更操作はマネージャー以上
+				organizations.POST("", middleware.RequireManagerOrAdmin(), orgHandler.CreateOrganization)
+				organizations.PUT("/:id", middleware.RequireManagerOrAdmin(), orgHandler.UpdateOrganization)
+				organizations.DELETE("/:id", middleware.RequireManagerOrAdmin(), orgHandler.DeleteOrganization)
+			}
+
+			// プロジェクト管理（読み取りは全員、変更はマネージャー以上）
+			projects := protected.Group("/projects")
+			{
+				projects.GET("", projectHandler.ListProjects)
+				projects.GET("/:id", projectHandler.GetProject)
+				projects.GET("/:id/issues", issueHandler.ListProjectIssues)
+
+				// 変更操作はマネージャー以上
+				projects.PUT("/:id/organization", middleware.RequireManagerOrAdmin(), projectHandler.AssignProjectToOrganization)
+			}
+
+			// チケット管理（読み取り専用）
+			issues := protected.Group("/issues")
+			{
+				issues.GET("", issueHandler.ListIssues)
+				issues.GET("/:id", issueHandler.GetIssue)
+			}
+
+			// ダッシュボード（読み取り専用）
+			dashboard := protected.Group("/dashboard")
+			{
+				dashboard.GET("/summary", dashboardHandler.GetDashboardSummary)
+				dashboard.GET("/organizations/:id", dashboardHandler.GetOrganizationSummary)
+				dashboard.GET("/projects/:id", dashboardHandler.GetProjectSummary)
+			}
+
+			// Jira同期（マネージャー以上、Jira統合が有効な場合のみ）
+			if syncHandler != nil {
+				sync := protected.Group("/sync", middleware.RequireManagerOrAdmin())
+				{
+					sync.POST("/trigger", syncHandler.TriggerSync)
+					sync.POST("/projects/:id", syncHandler.SyncProject)
+					sync.GET("/logs", syncHandler.GetSyncLogs)
+					sync.GET("/logs/latest", syncHandler.GetLatestSyncLog)
+					sync.GET("/logs/:id", syncHandler.GetSyncLog)
+				}
 			}
 		}
 	}
