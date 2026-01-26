@@ -36,6 +36,7 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 	issueRepo := postgres.NewIssueRepository(db)
 	syncLogRepo := postgres.NewSyncLogRepository(db)
 	userRepo := postgres.NewUserRepository(db)
+	auditLogRepo := postgres.NewAuditLogRepository(db)
 
 	// 認証サービスの初期化
 	jwtService := auth.NewJWTService(auth.JWTConfig{
@@ -46,6 +47,7 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 
 	// ユースケースの初期化
 	authUsecase := usecase.NewAuthUsecase(userRepo, jwtService, passwordService)
+	auditUsecase := usecase.NewAuditUsecase(auditLogRepo)
 	orgUsecase := usecase.NewOrganizationUsecase(orgRepo)
 	projectUsecase := usecase.NewProjectUsecase(projectRepo)
 	issueUsecase := usecase.NewIssueUsecase(issueRepo)
@@ -64,6 +66,7 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 
 	// ハンドラーの初期化
 	authHandler := httpHandler.NewAuthHandler(authUsecase)
+	auditHandler := httpHandler.NewAuditHandler(auditUsecase)
 	orgHandler := handler.NewOrganizationHandler(orgUsecase, log)
 	projectHandler := handler.NewProjectHandler(projectUsecase, log)
 	issueHandler := handler.NewIssueHandler(issueUsecase, log)
@@ -80,6 +83,7 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 
 	// API v1 ルートグループ
 	v1 := r.Group("/api/v1")
+	v1.Use(middleware.AuditMiddleware(auditUsecase)) // 監査ログミドルウェア
 	{
 		// 認証エンドポイント（認証不要）
 		auth := v1.Group("/auth")
@@ -153,6 +157,14 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 					sync.GET("/logs/latest", syncHandler.GetLatestSyncLog)
 					sync.GET("/logs/:id", syncHandler.GetSyncLog)
 				}
+			}
+
+			// 監査ログ（管理者のみ）
+			audit := protected.Group("/audit", middleware.RequireAdmin())
+			{
+				audit.GET("/logs", auditHandler.ListAuditLogs)
+				audit.GET("/logs/:id", auditHandler.GetAuditLog)
+				audit.DELETE("/logs/cleanup", auditHandler.CleanupOldLogs)
 			}
 		}
 	}
