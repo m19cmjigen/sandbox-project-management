@@ -67,8 +67,8 @@ func (s *Scheduler) runSync(ctx context.Context) {
 	}
 
 	duration := time.Since(startTime)
-	log.Printf("Scheduled sync completed in %v: Status=%s, Projects=%d, Issues=%d, Errors=%d",
-		duration, syncLog.Status, syncLog.ProjectsSynced, syncLog.IssuesSynced, syncLog.ErrorCount)
+	log.Printf("Scheduled sync completed in %v: Status=%s, Projects=%d, Issues=%d",
+		duration, syncLog.Status, syncLog.ProjectsSynced, syncLog.IssuesSynced)
 }
 
 // RunOnce executes a sync job once (useful for manual triggers)
@@ -79,7 +79,7 @@ func (s *Scheduler) RunOnce(ctx context.Context) error {
 		return err
 	}
 
-	log.Printf("One-time sync result: Status=%s, Projects=%d, Issues=%d, Errors=%d",
-		syncLog.Status, syncLog.ProjectsSynced, syncLog.IssuesSynced, syncLog.ErrorCount)
+	log.Printf("One-time sync result: Status=%s, Projects=%d, Issues=%d",
+		syncLog.Status, syncLog.ProjectsSynced, syncLog.IssuesSynced)
 	return nil
 }
