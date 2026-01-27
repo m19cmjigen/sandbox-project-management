@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-migrate db-rollback db-version db-force db-migration db-drop db-create db-reset \
+.PHONY: help db-up db-down db-migrate db-rollback db-version db-force db-migration db-drop db-create db-reset db-seed \
         backend-run backend-build backend-test backend-lint backend-fmt backend-deps backend-clean \
         sync-once sync-scheduler sync-build
 
@@ -20,6 +20,7 @@ help:
 	@echo "  make db-force V=1   - マイグレーションバージョンを強制設定"
 	@echo "  make db-migration name=feature_name - 新しいマイグレーションファイルを作成"
 	@echo "  make db-reset       - データベースをリセット（全削除後に再作成）"
+	@echo "  make db-seed        - シードデータを投入（開発・テスト用）"
 	@echo ""
 	@echo "バックエンド:"
 	@echo "  make backend-run    - バックエンドAPIを起動"
@@ -108,6 +109,12 @@ db-reset: db-rollback-all db-migrate
 db-connect:
 	@echo "PostgreSQLに接続中..."
 	psql "$(DATABASE_URL)"
+
+# シードデータの投入（開発・テスト用）
+db-seed:
+	@echo "シードデータを投入中..."
+	cd $(BACKEND_DIR) && DATABASE_URL="$(DATABASE_URL)" go run ./scripts/seed_data.go
+	@echo "シードデータの投入が完了しました"
 
 # =====================================
 # バックエンドコマンド
