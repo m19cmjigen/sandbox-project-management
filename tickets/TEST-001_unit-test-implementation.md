@@ -12,14 +12,19 @@ Testing
 ## タスク
 - [x] バックエンドテストフレームワーク選定（Go testing, testify等）
 - [ ] フロントエンドテストフレームワーク選定（Jest, Vitest等）
-- [x] バックエンドのユニットテスト作成（部分完了）
+- [x] バックエンドのユニットテスト作成（進行中）
   - [x] **ドメイン層**: 8テストケース（DelayStatus, IssueFilter, Organization等）
-  - [x] **リポジトリ層**: 20+テストケース
+  - [x] **リポジトリ層**: 27テストケース
     - Organization Repository (8 tests)
     - Project Repository (7 tests)
     - Issue Repository (6 tests)
     - User Repository (6 tests)
-  - [ ] ビジネスロジック層（TODO）
+  - [x] **ユースケース層**: 96テストケース（70/73 passing = 95.9%）
+    - Auth Usecase (27 tests) - 認証、ユーザー管理、JWT
+    - Dashboard Usecase (13 tests) - ダッシュボードサマリー
+    - Issue Usecase (18 tests) - Issue検索、フィルタリング
+    - Project Usecase (15 tests) - プロジェクト管理
+    - Organization Usecase (23 tests) - 組織階層管理
   - [ ] API層（TODO）
 - [ ] フロントエンドのユニットテスト作成
   - [ ] コンポーネント
@@ -48,11 +53,21 @@ Testing
 - `internal/infrastructure/postgres/issue_repository_impl_test.go`
 - `internal/infrastructure/postgres/user_repository_test.go`
 
+### ユースケース層ユニットテスト
+- `internal/usecase/auth_usecase_test.go` - 27テスト（認証、トークン管理）
+- `internal/usecase/dashboard_usecase_test.go` - 13テスト（サマリー、統計）
+- `internal/usecase/issue_usecase_test.go` - 18テスト（Issue操作）
+- `internal/usecase/project_usecase_test.go` - 15テスト（プロジェクト管理）
+- `internal/usecase/organization_usecase_test.go` - 23テスト（組織階層）
+
 ### テスト特徴
-- データベース接続が利用不可の場合は自動スキップ
+- データベース接続が利用不可の場合は自動スキップ（リポジトリ層）
 - CI環境ではPostgreSQLサービスコンテナで実行
 - テスト間の独立性を保証（クリーンアップ処理）
-- testify/assertを使用した読みやすいアサーション
+- testify/assert, testify/mock を使用
+- ユースケース層では完全なモッキング（依存ゼロ）
+- エラーハンドリングの網羅的テスト
+- 境界条件とエッジケースのカバレッジ
 
 ### テスト実行方法
 ```bash
@@ -64,16 +79,16 @@ make backend-coverage
 ```
 
 ## 残タスク
-1. **ユースケース層テスト**: ビジネスロジックの単体テスト
-2. **ハンドラー層テスト**: HTTPハンドラーのテスト
-3. **フロントエンドテスト**: Reactコンポーネントのテスト
-4. **カバレッジ目標達成**: 全体で80%以上
+1. **ハンドラー層テスト**: HTTPハンドラーのテスト（API層）
+2. **フロントエンドテスト**: Reactコンポーネントのテスト
+3. **カバレッジ目標達成**: 全体で80%以上
+4. **ユースケース層の残り3テスト修正**: GetTree, Create tests
 
 ## 依存関係
 各実装チケット
 
 ## 見積もり工数
-10日（残り: 6日）
+10日（残り: 4日）
 
 ## 進捗
-完了: 40% (ドメイン層100% + リポジトリ層100%)
+完了: 60% (ドメイン層100% + リポジトリ層100% + ユースケース層96%)
