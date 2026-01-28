@@ -1,6 +1,7 @@
 .PHONY: help db-up db-down db-migrate db-rollback db-version db-force db-migration db-drop db-create db-reset db-seed \
         backend-run backend-build backend-test backend-lint backend-fmt backend-deps backend-clean \
-        sync-once sync-scheduler sync-build
+        sync-once sync-scheduler sync-build \
+        perf-smoke perf-load perf-stress perf-large-data
 
 # デフォルトのデータベースURL（環境変数で上書き可能）
 DATABASE_URL ?= postgres://admin:admin123@localhost:5432/project_visualization?sslmode=disable
@@ -35,6 +36,12 @@ help:
 	@echo "  make sync-once      - Jira同期を1回実行"
 	@echo "  make sync-scheduler - Jira同期をスケジューラーモードで実行"
 	@echo "  make sync-build     - 同期CLIツールをビルド"
+	@echo ""
+	@echo "パフォーマンステスト:"
+	@echo "  make perf-smoke     - スモークテスト（疎通確認）"
+	@echo "  make perf-load      - 負荷テスト（50-100 VU）"
+	@echo "  make perf-stress    - ストレステスト（最大200 VU）"
+	@echo "  make perf-large-data - 大量データ生成（10,000+ issues）"
 	@echo ""
 	@echo "Docker Compose:"
 	@echo "  make up             - すべてのサービスを起動"
@@ -214,3 +221,32 @@ sync-scheduler:
 	@echo "Jira同期をスケジューラーモードで実行中..."
 	@echo "同期間隔: 1時間"
 	cd $(BACKEND_DIR) && go run cmd/sync/main.go -mode=scheduler -org-id=1 -interval=1h
+
+# =====================================
+# パフォーマンステストコマンド
+# =====================================
+
+# スモークテスト（疎通確認）
+perf-smoke:
+	@echo "スモークテストを実行中..."
+	@command -v k6 >/dev/null 2>&1 || { echo "エラー: k6がインストールされていません。README.mdを参照してください。"; exit 1; }
+	k6 run performance/smoke-test.js
+
+# 負荷テスト（通常運用を想定）
+perf-load:
+	@echo "負荷テストを実行中..."
+	@command -v k6 >/dev/null 2>&1 || { echo "エラー: k6がインストールされていません。"; exit 1; }
+	k6 run performance/api-load-test.js
+
+# ストレステスト（高負荷・限界確認）
+perf-stress:
+	@echo "ストレステストを実行中..."
+	@command -v k6 >/dev/null 2>&1 || { echo "エラー: k6がインストールされていません。"; exit 1; }
+	k6 run performance/stress-test.js
+
+# 大量データ生成（パフォーマンステスト用）
+perf-large-data:
+	@echo "大量テストデータを生成中（10,000+ issues）..."
+	@echo "警告: この処理には数分かかる場合があります"
+	cd $(BACKEND_DIR) && DATABASE_URL="$(DATABASE_URL)" go run ./scripts/generate_large_dataset.go
+	@echo "大量データ生成が完了しました"
