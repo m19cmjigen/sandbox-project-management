@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react'
 import {
-  Alert,
   Box,
   Card,
   CardContent,
-  CircularProgress,
   Divider,
   Grid,
   Stack,
@@ -20,6 +18,8 @@ import { getDashboardSummary } from '../api/dashboard'
 import { buildDashboardTree } from '../types/dashboard'
 import type { DashboardSummary, DashboardOrgNode } from '../types/dashboard'
 import HeatmapCard from '../components/HeatmapCard'
+import LoadingSpinner from '../components/LoadingSpinner'
+import ErrorMessage from '../components/ErrorMessage'
 
 interface SummaryCardProps {
   label: string
@@ -108,18 +108,25 @@ export default function Dashboard() {
     load()
   }, [])
 
+  const handleRetry = () => {
+    setError(null)
+    setLoading(true)
+    getDashboardSummary()
+      .then(setSummary)
+      .catch(() => setError('ダッシュボードデータの取得に失敗しました。'))
+      .finally(() => setLoading(false))
+  }
+
   const roots = summary ? buildDashboardTree(summary.organizations) : []
 
   return (
     <Box>
       <Typography variant="h4" sx={{ mb: 3 }}>ダッシュボード</Typography>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && <ErrorMessage message={error} onRetry={handleRetry} />}
 
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-          <CircularProgress />
-        </Box>
+        <LoadingSpinner minHeight={320} />
       ) : summary && (
         <>
           {/* Summary cards */}

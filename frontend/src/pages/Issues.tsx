@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Alert,
   Box,
   Button,
   Checkbox,
-  Chip,
-  CircularProgress,
   FormControl,
   FormControlLabel,
   InputLabel,
@@ -36,20 +33,12 @@ import { getIssues } from '../api/issues'
 import type { Issue, IssueSortKey, IssueListParams, SortOrder } from '../types/issue'
 import type { DelayStatus, PaginationMeta } from '../types/project'
 import { formatDate, isDueDateOverdue } from '../utils/dateUtils'
+import LoadingSpinner from '../components/LoadingSpinner'
+import ErrorMessage from '../components/ErrorMessage'
+import StatusBadge from '../components/StatusBadge'
 
 const JIRA_BASE_URL = import.meta.env.VITE_JIRA_BASE_URL || ''
 const PER_PAGE = 25
-
-const DELAY_COLOR: Record<DelayStatus, 'error' | 'warning' | 'success'> = {
-  RED: 'error',
-  YELLOW: 'warning',
-  GREEN: 'success',
-}
-const DELAY_LABEL: Record<DelayStatus, string> = {
-  RED: '遅延',
-  YELLOW: '注意',
-  GREEN: '正常',
-}
 
 function exportCSV(issues: Issue[]) {
   const headers = ['キー', 'サマリ', 'プロジェクト', 'ステータス', '期限', '担当者', '遅延ステータス', '優先度', 'タイプ']
@@ -280,10 +269,10 @@ export default function Issues() {
         </Typography>
       )}
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && <ErrorMessage message={error} onRetry={fetchIssues} />}
 
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
+        <LoadingSpinner minHeight={320} />
       ) : (
         <>
           <TableContainer component={Paper} variant="outlined">
@@ -335,12 +324,7 @@ export default function Issues() {
                         sx={{ '&:last-child td': { border: 0 } }}
                       >
                         <TableCell>
-                          <Chip
-                            label={DELAY_LABEL[issue.delay_status]}
-                            color={DELAY_COLOR[issue.delay_status]}
-                            size="small"
-                            variant="outlined"
-                          />
+                          <StatusBadge status={issue.delay_status} />
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
