@@ -33,12 +33,12 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 		// 組織管理
 		organizations := v1.Group("/organizations")
 		{
-			organizations.GET("", listOrganizationsHandler)
-			organizations.GET("/:id", getOrganizationHandler)
+			organizations.GET("", listOrganizationsHandlerWithDB(db))
+			organizations.GET("/:id", getOrganizationHandlerWithDB(db))
 			organizations.POST("", createOrganizationHandler)
 			organizations.PUT("/:id", updateOrganizationHandler)
 			organizations.DELETE("/:id", deleteOrganizationHandler)
-			organizations.GET("/:id/children", getChildOrganizationsHandler)
+			organizations.GET("/:id/children", getChildOrganizationsHandlerWithDB(db))
 		}
 
 		// プロジェクト管理
