@@ -44,8 +44,8 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 		// プロジェクト管理
 		projects := v1.Group("/projects")
 		{
-			projects.GET("", listProjectsHandler)
-			projects.GET("/:id", getProjectHandler)
+			projects.GET("", listProjectsHandlerWithDB(db))
+			projects.GET("/:id", getProjectHandlerWithDB(db))
 			projects.PUT("/:id", updateProjectHandler)
 			projects.PUT("/:id/organization", assignProjectToOrganizationHandler)
 			projects.GET("/:id/issues", listProjectIssuesHandler)
