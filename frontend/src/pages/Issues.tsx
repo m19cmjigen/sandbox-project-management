@@ -35,6 +35,7 @@ import type { SelectChangeEvent } from '@mui/material'
 import { getIssues } from '../api/issues'
 import type { Issue, IssueSortKey, IssueListParams, SortOrder } from '../types/issue'
 import type { DelayStatus, PaginationMeta } from '../types/project'
+import { formatDate, isDueDateOverdue } from '../utils/dateUtils'
 
 const JIRA_BASE_URL = import.meta.env.VITE_JIRA_BASE_URL || ''
 const PER_PAGE = 25
@@ -48,16 +49,6 @@ const DELAY_LABEL: Record<DelayStatus, string> = {
   RED: '遅延',
   YELLOW: '注意',
   GREEN: '正常',
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '—'
-  return dateStr
-}
-
-function isDueDateOverdue(dateStr: string | null, statusCategory: string): boolean {
-  if (!dateStr || statusCategory === 'Done') return false
-  return new Date(dateStr) < new Date(new Date().toDateString())
 }
 
 function exportCSV(issues: Issue[]) {
