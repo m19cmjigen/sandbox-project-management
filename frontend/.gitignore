@@ -34,6 +34,9 @@ dist-ssr
 coverage
 *.lcov
 .nyc_output
+test-results/
+e2e/report/
+playwright-report/
 
 # Production
 build
