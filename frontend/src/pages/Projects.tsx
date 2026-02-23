@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import {
   Alert,
   Box,
+  Button,
   CircularProgress,
   FormControl,
   Grid,
@@ -14,6 +16,7 @@ import {
   ToggleButtonGroup,
   Typography,
 } from '@mui/material'
+import { ArrowBack as BackIcon } from '@mui/icons-material'
 import type { SelectChangeEvent } from '@mui/material'
 import ProjectCard from '../components/ProjectCard'
 import { getProjects } from '../api/projects'
@@ -22,6 +25,13 @@ import type { DelayFilter, PaginationMeta, Project, SortOption } from '../types/
 const PER_PAGE = 12
 
 export default function Projects() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
+
+  // Read organization_id from URL params (set when drilling down from org tree)
+  const orgIdParam = searchParams.get('organization_id')
+  const orgId = orgIdParam ? parseInt(orgIdParam, 10) : undefined
+
   const [projects, setProjects] = useState<Project[]>([])
   const [pagination, setPagination] = useState<PaginationMeta | null>(null)
   const [loading, setLoading] = useState(true)
@@ -40,6 +50,7 @@ export default function Projects() {
         per_page: PER_PAGE,
         sort,
         delay_status: delayFilter,
+        organization_id: orgId,
       })
       setProjects(res.data)
       setPagination(res.pagination)
@@ -48,7 +59,7 @@ export default function Projects() {
     } finally {
       setLoading(false)
     }
-  }, [page, sort, delayFilter])
+  }, [page, sort, delayFilter, orgId])
 
   useEffect(() => {
     fetchProjects()
@@ -72,12 +83,44 @@ export default function Projects() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const handleClearOrgFilter = () => {
+    setSearchParams({})
+    setPage(1)
+  }
+
   return (
     <Box>
       {/* Page title */}
-      <Typography variant="h4" gutterBottom>
-        プロジェクト一覧
-      </Typography>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+        {orgId && (
+          <Button
+            size="small"
+            startIcon={<BackIcon />}
+            onClick={() => navigate('/organizations')}
+            sx={{ mr: 1 }}
+          >
+            組織一覧へ戻る
+          </Button>
+        )}
+        <Typography variant="h4">
+          プロジェクト一覧
+        </Typography>
+      </Stack>
+
+      {/* Organization filter badge */}
+      {orgId && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          action={
+            <Button color="inherit" size="small" onClick={handleClearOrgFilter}>
+              絞り込み解除
+            </Button>
+          }
+        >
+          組織ID {orgId} でフィルタ中
+        </Alert>
+      )}
 
       {/* Toolbar: filter + sort */}
       <Stack
