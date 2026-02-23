@@ -1,0 +1,902 @@
+openapi: 3.0.3
+info:
+  title: Project Visualization API
+  description: |
+    全社プロジェクト進捗可視化プラットフォームのREST API。
+    Jiraデータを組織横断で可視化するためのエンドポイントを提供します。
+  version: 1.0.0
+  contact:
+    name: API Support
+
+servers:
+  - url: http://localhost:8080
+    description: ローカル開発環境
+
+tags:
+  - name: health
+    description: ヘルスチェック
+  - name: organizations
+    description: 組織管理
+  - name: projects
+    description: プロジェクト管理
+  - name: issues
+    description: チケット管理
+  - name: dashboard
+    description: ダッシュボード統計
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: ヘルスチェック
+      description: サービスの稼働状態を確認します。
+      responses:
+        '200':
+          description: サービス稼働中
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  service:
+                    type: string
+                    example: project-visualization-api
+
+  /ready:
+    get:
+      tags: [health]
+      summary: レディネスチェック
+      description: データベース接続を含むサービスの準備状態を確認します。
+      responses:
+        '200':
+          description: サービス準備完了
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+                  database:
+                    type: string
+                    example: connected
+        '503':
+          description: データベース接続不可
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/organizations:
+    get:
+      tags: [organizations]
+      summary: 組織一覧取得
+      description: すべての組織をプロジェクト遅延統計付きで取得します。pathカラムでソートされます。
+      responses:
+        '200':
+          description: 組織一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Organization'
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags: [organizations]
+      summary: 組織作成
+      description: 新しい組織を作成します。階層は最大3レベル（level 0〜2）です。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrganizationRequest'
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          description: リクエスト不正（名前未指定、親組織が存在しない、階層上限超過）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/organizations/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+        description: 組織ID
+
+    get:
+      tags: [organizations]
+      summary: 組織詳細取得
+      responses:
+        '200':
+          description: 組織詳細
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          description: IDが不正
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 組織が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags: [organizations]
+      summary: 組織更新
+      description: 組織名を更新します。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          description: リクエスト不正
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 組織が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags: [organizations]
+      summary: 組織削除
+      description: |
+        組織を削除します。
+        以下の条件の場合は削除できません:
+        - 子組織が存在する場合 (409 Conflict)
+        - プロジェクトが割り当てられている場合 (409 Conflict)
+      responses:
+        '200':
+          description: 削除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: organization deleted
+        '400':
+          description: IDが不正
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 組織が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: 子組織またはプロジェクトが存在するため削除不可
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/organizations/{id}/children:
+    get:
+      tags: [organizations]
+      summary: 子組織一覧取得
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: 親組織ID
+      responses:
+        '200':
+          description: 子組織一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Organization'
+        '400':
+          description: IDが不正
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/projects:
+    get:
+      tags: [projects]
+      summary: プロジェクト一覧取得
+      description: プロジェクト一覧をチケット遅延統計付きでページネーション付きで取得します。
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: ページ番号
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 1ページあたりの件数
+        - name: organization_id
+          in: query
+          schema:
+            type: integer
+            format: int64
+          description: 組織IDでフィルタリング
+        - name: unassigned
+          in: query
+          schema:
+            type: boolean
+          description: trueの場合、未割り当てプロジェクトのみ返す
+        - name: delay_status
+          in: query
+          schema:
+            type: string
+            enum: [RED, YELLOW, GREEN]
+          description: 遅延ステータスでフィルタリング
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name, name_desc, delay_count]
+            default: name
+          description: ソート順 (name=名前昇順, name_desc=名前降順, delay_count=遅延件数降順)
+      responses:
+        '200':
+          description: プロジェクト一覧
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectListResponse'
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/projects/{id}:
+    get:
+      tags: [projects]
+      summary: プロジェクト詳細取得
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: プロジェクトID
+      responses:
+        '200':
+          description: プロジェクト詳細
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          description: IDが不正
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: プロジェクトが存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/projects/{id}/organization:
+    put:
+      tags: [projects]
+      summary: プロジェクトの組織割り当て
+      description: プロジェクトを組織に割り当てます。organization_idにnullを指定すると割り当てを解除します。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: プロジェクトID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignProjectOrgRequest'
+      responses:
+        '200':
+          description: 割り当て成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: project assigned successfully
+        '400':
+          description: リクエスト不正または組織が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: プロジェクトが存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/issues:
+    get:
+      tags: [issues]
+      summary: チケット一覧取得
+      description: チケット一覧をフィルタリング・ソート・ページネーション付きで取得します。
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: ページ番号
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 25
+            minimum: 1
+            maximum: 100
+          description: 1ページあたりの件数
+        - name: project_id
+          in: query
+          schema:
+            type: integer
+            format: int64
+          description: プロジェクトIDでフィルタリング
+        - name: delay_status
+          in: query
+          schema:
+            type: string
+            enum: [RED, YELLOW, GREEN]
+          description: 遅延ステータスでフィルタリング
+        - name: no_due_date
+          in: query
+          schema:
+            type: boolean
+          description: trueの場合、期日未設定のチケットのみ返す
+        - name: status_category
+          in: query
+          schema:
+            type: string
+            enum: [To Do, In Progress, Done]
+          description: ステータスカテゴリでフィルタリング
+        - name: assignee_name
+          in: query
+          schema:
+            type: string
+          description: 担当者名で部分一致フィルタリング
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [due_date, last_updated_at, jira_issue_key, delay_status]
+            default: due_date
+          description: ソートカラム
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+          description: ソート順
+      responses:
+        '200':
+          description: チケット一覧
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueListResponse'
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/issues/{id}:
+    get:
+      tags: [issues]
+      summary: チケット詳細取得
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: チケットID
+      responses:
+        '200':
+          description: チケット詳細
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        '400':
+          description: IDが不正
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: チケットが存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/dashboard/summary:
+    get:
+      tags: [dashboard]
+      summary: ダッシュボードサマリ取得
+      description: 全体のプロジェクト・チケット数と組織ごとの遅延統計を取得します。
+      responses:
+        '200':
+          description: ダッシュボードサマリ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardSummaryResponse'
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/dashboard/organizations/{id}:
+    get:
+      tags: [dashboard]
+      summary: 組織別サマリ取得
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: 組織ID
+      responses:
+        '200':
+          description: 組織別サマリ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgSummaryResponse'
+        '400':
+          description: IDが不正
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 組織が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: failed to fetch organizations
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        per_page:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 100
+        total_pages:
+          type: integer
+          example: 5
+
+    Organization:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        name:
+          type: string
+          example: 開発本部
+        parent_id:
+          type: integer
+          format: int64
+          nullable: true
+          example: null
+        path:
+          type: string
+          example: /1/
+        level:
+          type: integer
+          enum: [0, 1, 2]
+          description: 0=本部, 1=部, 2=課
+          example: 0
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        total_projects:
+          type: integer
+          example: 10
+        red_projects:
+          type: integer
+          example: 2
+        yellow_projects:
+          type: integer
+          example: 3
+        green_projects:
+          type: integer
+          example: 5
+        delay_status:
+          type: string
+          enum: [RED, YELLOW, GREEN]
+          example: RED
+
+    CreateOrganizationRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: 開発部
+        parent_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: 親組織ID。未指定の場合はルート組織 (level=0) として作成
+
+    UpdateOrganizationRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: 新開発部
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        jira_project_id:
+          type: string
+          example: 10001
+        key:
+          type: string
+          example: PROJ
+        name:
+          type: string
+          example: プロジェクトA
+        lead_account_id:
+          type: string
+          nullable: true
+          example: 5f3e1234abc
+        lead_email:
+          type: string
+          nullable: true
+          example: lead@example.com
+        organization_id:
+          type: integer
+          format: int64
+          nullable: true
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        red_count:
+          type: integer
+          example: 3
+        yellow_count:
+          type: integer
+          example: 2
+        green_count:
+          type: integer
+          example: 15
+        open_count:
+          type: integer
+          example: 10
+        total_count:
+          type: integer
+          example: 20
+        delay_status:
+          type: string
+          enum: [RED, YELLOW, GREEN]
+          example: RED
+
+    ProjectListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Project'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    AssignProjectOrgRequest:
+      type: object
+      properties:
+        organization_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: 組織ID。nullの場合は割り当て解除
+
+    Issue:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        jira_issue_id:
+          type: string
+          example: 10001
+        jira_issue_key:
+          type: string
+          example: PROJ-123
+        project_id:
+          type: integer
+          format: int64
+          example: 1
+        project_key:
+          type: string
+          example: PROJ
+        project_name:
+          type: string
+          example: プロジェクトA
+        summary:
+          type: string
+          example: ログイン機能の実装
+        status:
+          type: string
+          example: In Progress
+        status_category:
+          type: string
+          enum: [To Do, In Progress, Done]
+          example: In Progress
+        due_date:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-03-31"
+        assignee_name:
+          type: string
+          nullable: true
+          example: 田中太郎
+        assignee_account_id:
+          type: string
+          nullable: true
+          example: 5f3e5678def
+        delay_status:
+          type: string
+          enum: [RED, YELLOW, GREEN]
+          example: RED
+        priority:
+          type: string
+          nullable: true
+          example: High
+        issue_type:
+          type: string
+          nullable: true
+          example: Story
+        last_updated_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    IssueListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Issue'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    DashboardOrg:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        name:
+          type: string
+          example: 開発本部
+        parent_id:
+          type: integer
+          format: int64
+          nullable: true
+          example: null
+        level:
+          type: integer
+          example: 0
+        total_projects:
+          type: integer
+          example: 10
+        red_projects:
+          type: integer
+          example: 2
+        yellow_projects:
+          type: integer
+          example: 3
+        green_projects:
+          type: integer
+          example: 5
+        delay_status:
+          type: string
+          enum: [RED, YELLOW, GREEN]
+          example: RED
+        delay_rate:
+          type: number
+          format: float
+          description: 遅延プロジェクト率 (red_projects / total_projects)
+          example: 0.2
+
+    DashboardSummaryResponse:
+      type: object
+      properties:
+        total_projects:
+          type: integer
+          example: 25
+        red_projects:
+          type: integer
+          example: 5
+        yellow_projects:
+          type: integer
+          example: 8
+        green_projects:
+          type: integer
+          example: 12
+        total_issues:
+          type: integer
+          example: 500
+        red_issues:
+          type: integer
+          example: 50
+        yellow_issues:
+          type: integer
+          example: 100
+        green_issues:
+          type: integer
+          example: 350
+        organizations:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardOrg'
+
+    OrgSummaryResponse:
+      type: object
+      properties:
+        organization:
+          $ref: '#/components/schemas/DashboardOrg'
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/Project'
