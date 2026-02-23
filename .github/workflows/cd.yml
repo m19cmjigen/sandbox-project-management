@@ -1,0 +1,267 @@
+name: CD
+
+on:
+  # mainへのマージ後に自動デプロイ（staging）
+  push:
+    branches: [main]
+  # 本番デプロイは手動承認
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deploy target environment
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+
+# 同一environmentへの同時デプロイを防止
+concurrency:
+  group: deploy-${{ github.event.inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-northeast-1
+  ECR_REPOSITORY: project-viz-api
+  ECS_CLUSTER: project-viz
+  ECS_SERVICE_BACKEND: project-viz-api
+  FRONTEND_BUCKET_STAGING: project-viz-frontend-staging
+  FRONTEND_BUCKET_PRODUCTION: project-viz-frontend-production
+  CLOUDFRONT_DISTRIBUTION_STAGING: ${{ secrets.CLOUDFRONT_DISTRIBUTION_STAGING }}
+  CLOUDFRONT_DISTRIBUTION_PRODUCTION: ${{ secrets.CLOUDFRONT_DISTRIBUTION_PRODUCTION }}
+
+jobs:
+  # ==========================================
+  # CI が通過した場合のみデプロイ
+  # ==========================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    environment: staging
+    # 手動実行の場合はstaging指定時のみ、自動実行はpush時
+    if: >
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # --- AWS認証 ---
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # --- バックエンド: Docker Build & Push to ECR ---
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push backend image to ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./backend
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            $ECR_REGISTRY/$ECR_REPOSITORY:staging-latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:staging-latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      # --- バックエンド: DBマイグレーション (ECS Run Task) ---
+      - name: Run database migrations
+        run: |
+          aws ecs run-task \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --task-definition project-viz-migrate-staging \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.SUBNET_IDS_STAGING }}],securityGroups=[${{ secrets.SG_ID_STAGING }}],assignPublicIp=DISABLED}" \
+            --overrides '{"containerOverrides":[{"name":"migrate","command":["up"]}]}' \
+            --wait-for-completion
+
+      # --- バックエンド: ECS サービス更新 ---
+      - name: Download current ECS task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition project-viz-api-staging \
+            --query taskDefinition > task-def.json
+
+      - name: Update ECS task definition with new image
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-def.json
+          container-name: api
+          image: ${{ steps.build-image.outputs.image }}
+
+      - name: Deploy to ECS (Staging)
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE_BACKEND }}-staging
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      # --- フロントエンド: ビルド & S3デプロイ ---
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend (staging)
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: ${{ secrets.STAGING_API_BASE_URL }}
+          VITE_JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+        run: npm run build
+
+      - name: Deploy frontend to S3 (Staging)
+        run: |
+          aws s3 sync frontend/dist/ \
+            s3://${{ env.FRONTEND_BUCKET_STAGING }}/ \
+            --delete \
+            --cache-control "public,max-age=31536000,immutable" \
+            --exclude "index.html"
+          # index.html はキャッシュ無効化
+          aws s3 cp frontend/dist/index.html \
+            s3://${{ env.FRONTEND_BUCKET_STAGING }}/index.html \
+            --cache-control "no-cache,no-store,must-revalidate"
+
+      - name: Invalidate CloudFront cache (Staging)
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_STAGING }} \
+            --paths "/*"
+
+      - name: Deployment summary
+        run: |
+          echo "## Staging Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend image**: ${{ steps.build-image.outputs.image }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend**: s3://${{ env.FRONTEND_BUCKET_STAGING }}/" >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================
+  # 本番デプロイ（手動実行 + GitHub Environments 承認）
+  # ==========================================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    environment: production   # GitHub Environments の Required reviewers で承認フロー
+    if: >
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.environment == 'production'
+    needs: []  # stagingへの依存は任意（本番は独立して手動実行）
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push backend image (Production)
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./backend
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Run database migrations (Production)
+        run: |
+          aws ecs run-task \
+            --cluster ${{ env.ECS_CLUSTER }}-prod \
+            --task-definition project-viz-migrate-production \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.SUBNET_IDS_PROD }}],securityGroups=[${{ secrets.SG_ID_PROD }}],assignPublicIp=DISABLED}" \
+            --overrides '{"containerOverrides":[{"name":"migrate","command":["up"]}]}' \
+            --wait-for-completion
+
+      - name: Download current ECS task definition (Production)
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition project-viz-api-production \
+            --query taskDefinition > task-def.json
+
+      - name: Update ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-def.json
+          container-name: api
+          image: ${{ steps.build-image.outputs.image }}
+
+      - name: Deploy to ECS (Production)
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE_BACKEND }}-production
+          cluster: ${{ env.ECS_CLUSTER }}-prod
+          wait-for-service-stability: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend (production)
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: ${{ secrets.PRODUCTION_API_BASE_URL }}
+          VITE_JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+        run: npm run build
+
+      - name: Deploy frontend to S3 (Production)
+        run: |
+          aws s3 sync frontend/dist/ \
+            s3://${{ env.FRONTEND_BUCKET_PRODUCTION }}/ \
+            --delete \
+            --cache-control "public,max-age=31536000,immutable" \
+            --exclude "index.html"
+          aws s3 cp frontend/dist/index.html \
+            s3://${{ env.FRONTEND_BUCKET_PRODUCTION }}/index.html \
+            --cache-control "no-cache,no-store,must-revalidate"
+
+      - name: Invalidate CloudFront cache (Production)
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_PRODUCTION }} \
+            --paths "/*"
+
+      - name: Deployment summary
+        run: |
+          echo "## Production Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend image**: ${{ steps.build-image.outputs.image }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend**: s3://${{ env.FRONTEND_BUCKET_PRODUCTION }}/" >> $GITHUB_STEP_SUMMARY
