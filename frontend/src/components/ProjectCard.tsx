@@ -90,6 +90,7 @@ export default function ProjectCard({ project }: ProjectCardProps) {
             <IconButton
               size="small"
               color="primary"
+              aria-label="チケット一覧"
               onClick={() => navigate(`/issues?project_id=${project.id}`)}
             >
               <IssuesIcon fontSize="small" />
