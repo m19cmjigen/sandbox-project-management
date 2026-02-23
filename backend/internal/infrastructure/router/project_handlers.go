@@ -50,6 +50,7 @@ func listProjectsHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// --- Parse query params ---
 		orgIDStr := c.Query("organization_id")
+		unassigned := c.Query("unassigned") == "true"
 		delayStatusFilter := c.Query("delay_status")
 		sortParam := c.DefaultQuery("sort", "name")
 
@@ -67,7 +68,9 @@ func listProjectsHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
 		var args []interface{}
 		argIdx := 1
 
-		if orgIDStr != "" {
+		if unassigned {
+			conditions = append(conditions, "p.organization_id IS NULL")
+		} else if orgIDStr != "" {
 			orgID, err := strconv.ParseInt(orgIDStr, 10, 64)
 			if err == nil {
 				conditions = append(conditions, fmt.Sprintf("p.organization_id = $%d", argIdx))

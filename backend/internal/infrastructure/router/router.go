@@ -35,9 +35,9 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 		{
 			organizations.GET("", listOrganizationsHandlerWithDB(db))
 			organizations.GET("/:id", getOrganizationHandlerWithDB(db))
-			organizations.POST("", createOrganizationHandler)
-			organizations.PUT("/:id", updateOrganizationHandler)
-			organizations.DELETE("/:id", deleteOrganizationHandler)
+			organizations.POST("", createOrganizationHandlerWithDB(db))
+			organizations.PUT("/:id", updateOrganizationHandlerWithDB(db))
+			organizations.DELETE("/:id", deleteOrganizationHandlerWithDB(db))
 			organizations.GET("/:id/children", getChildOrganizationsHandlerWithDB(db))
 		}
 
@@ -47,7 +47,7 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 			projects.GET("", listProjectsHandlerWithDB(db))
 			projects.GET("/:id", getProjectHandlerWithDB(db))
 			projects.PUT("/:id", updateProjectHandler)
-			projects.PUT("/:id/organization", assignProjectToOrganizationHandler)
+			projects.PUT("/:id/organization", assignProjectToOrganizationHandlerWithDB(db))
 			projects.GET("/:id/issues", listProjectIssuesHandler)
 		}
 
