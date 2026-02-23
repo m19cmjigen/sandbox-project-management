@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import {
   Box,
   Card,
@@ -12,6 +13,7 @@ import {
   WarningAmber as YellowIcon,
   CheckCircleOutline as GreenIcon,
   OpenInNew as ExternalLinkIcon,
+  Assignment as IssuesIcon,
 } from '@mui/icons-material'
 import type { Project } from '../types/project'
 
@@ -46,6 +48,7 @@ const statusConfig = {
 }
 
 export default function ProjectCard({ project }: ProjectCardProps) {
+  const navigate = useNavigate()
   const config = statusConfig[project.delay_status]
   const jiraUrl = JIRA_BASE_URL
     ? `${JIRA_BASE_URL}/browse/${project.key}`
@@ -83,6 +86,15 @@ export default function ProjectCard({ project }: ProjectCardProps) {
             variant="outlined"
           />
           <Box sx={{ flexGrow: 1 }} />
+          <Tooltip title="チケット一覧">
+            <IconButton
+              size="small"
+              color="primary"
+              onClick={() => navigate(`/issues?project_id=${project.id}`)}
+            >
+              <IssuesIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           {jiraUrl && (
             <Tooltip title="Jiraで開く">
               <IconButton
