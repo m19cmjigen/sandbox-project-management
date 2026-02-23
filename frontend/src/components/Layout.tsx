@@ -18,6 +18,7 @@ import {
   Business as BusinessIcon,
   Folder as FolderIcon,
   BugReport as BugReportIcon,
+  Settings as SettingsIcon,
 } from '@mui/icons-material'
 import { useNavigate, useLocation } from 'react-router-dom'
 
@@ -25,7 +26,8 @@ const drawerWidth = 240
 
 const menuItems = [
   { text: 'ダッシュボード', icon: <DashboardIcon />, path: '/' },
-  { text: '組織管理', icon: <BusinessIcon />, path: '/organizations' },
+  { text: '組織ツリー', icon: <BusinessIcon />, path: '/organizations' },
+  { text: '組織管理', icon: <SettingsIcon />, path: '/organizations/manage' },
   { text: 'プロジェクト', icon: <FolderIcon />, path: '/projects' },
   { text: 'チケット', icon: <BugReportIcon />, path: '/issues' },
 ]
