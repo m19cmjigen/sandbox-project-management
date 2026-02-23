@@ -77,7 +77,7 @@ func listOrganizationsHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
 			ORDER BY o.path
 		`
 
-		var orgs []OrganizationRow
+		orgs := make([]OrganizationRow, 0)
 		if err := db.Select(&orgs, query); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch organizations"})
 			return
@@ -133,7 +133,7 @@ func getChildOrganizationsHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
 			ORDER BY o.path
 		`
 
-		var orgs []OrganizationRow
+		orgs := make([]OrganizationRow, 0)
 		if err := db.Select(&orgs, query, id); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch child organizations"})
 			return

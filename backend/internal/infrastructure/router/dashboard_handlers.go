@@ -215,7 +215,7 @@ func getOrganizationSummaryHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
 			         p.organization_id, p.created_at, p.updated_at
 			ORDER BY red_count DESC, yellow_count DESC, p.name ASC
 		`
-		var projects []ProjectRow
+		projects := make([]ProjectRow, 0)
 		if err := db.Select(&projects, projectQuery, id); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch projects"})
 			return
