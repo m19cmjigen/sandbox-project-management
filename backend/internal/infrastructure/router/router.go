@@ -61,8 +61,8 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 		// ダッシュボード
 		dashboard := v1.Group("/dashboard")
 		{
-			dashboard.GET("/summary", getDashboardSummaryHandler)
-			dashboard.GET("/organizations/:id", getOrganizationSummaryHandler)
+			dashboard.GET("/summary", getDashboardSummaryHandlerWithDB(db))
+			dashboard.GET("/organizations/:id", getOrganizationSummaryHandlerWithDB(db))
 			dashboard.GET("/projects/:id", getProjectSummaryHandler)
 		}
 	}
