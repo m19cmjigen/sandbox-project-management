@@ -163,7 +163,7 @@ func listProjectsHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
 
 		queryArgs := append(args, perPage, offset)
 
-		var projects []ProjectRow
+		projects := make([]ProjectRow, 0)
 		if err := db.Select(&projects, mainQuery, queryArgs...); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch projects"})
 			return

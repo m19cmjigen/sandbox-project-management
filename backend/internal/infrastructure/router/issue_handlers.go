@@ -165,7 +165,7 @@ func listIssuesHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
 
 		queryArgs := append(args, perPage, offset)
 
-		var issues []IssueRow
+		issues := make([]IssueRow, 0)
 		if err := db.Select(&issues, mainQuery, queryArgs...); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch issues"})
 			return
