@@ -54,8 +54,8 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 		// チケット管理
 		issues := v1.Group("/issues")
 		{
-			issues.GET("", listIssuesHandler)
-			issues.GET("/:id", getIssueHandler)
+			issues.GET("", listIssuesHandlerWithDB(db))
+			issues.GET("/:id", getIssueHandlerWithDB(db))
 		}
 
 		// ダッシュボード
