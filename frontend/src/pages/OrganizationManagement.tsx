@@ -4,7 +4,6 @@ import {
   Box,
   Button,
   Chip,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -37,6 +36,7 @@ import { getOrganizations, createOrganization, updateOrganization, deleteOrganiz
 import { getUnassignedProjects, assignProjectOrganization } from '../api/projects'
 import type { Organization } from '../types/organization'
 import type { Project } from '../types/project'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 // ---- Organization tree helpers ----
 
@@ -284,7 +284,7 @@ export default function OrganizationManagement() {
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
+        <LoadingSpinner minHeight={320} />
       ) : (
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} alignItems="flex-start">
           {/* Left: Organization tree */}
