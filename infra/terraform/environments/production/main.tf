@@ -11,7 +11,7 @@ terraform {
   # Remote state stored in S3 (bucket and table created by INFRA-002)
   backend "s3" {
     bucket         = "project-viz-terraform-state"
-    key            = "production/vpc-iam.tfstate"
+    key            = "production/main.tfstate"
     region         = "ap-northeast-1"
     dynamodb_table = "project-viz-terraform-lock"
     encrypt        = true
@@ -76,6 +76,27 @@ module "iam" {
 
   # OIDC provider is already created by staging; do not recreate.
   create_github_oidc_provider = false
+
+  tags = local.common_tags
+}
+
+# ---------------------------------------------------------------------------
+# Aurora Module
+# ---------------------------------------------------------------------------
+module "aurora" {
+  source = "../../modules/aurora"
+
+  project     = local.project
+  environment = local.environment
+
+  private_subnet_ids = module.vpc.private_subnet_ids
+  db_sg_id           = module.vpc.db_sg_id
+
+  # production: writer + reader, memory-optimized instance, 7-day backup, deletion protection
+  instance_class        = "db.r8g.large"
+  instance_count        = 2
+  backup_retention_days = 7
+  deletion_protection   = true
 
   tags = local.common_tags
 }
