@@ -36,6 +36,11 @@ func loginHandler(db *sqlx.DB, tm *auth.TokenManager) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "email and password are required"})
 			return
 		}
+		// パスワード最小長チェック（ブルートフォース攻撃の抑制も兼ねる）
+		if len(req.Password) < 8 {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
+			return
+		}
 
 		// DB からユーザー取得
 		var user struct {
