@@ -1,12 +1,11 @@
 import { useNavigate } from 'react-router-dom'
 import {
   Box,
-  Card,
-  CardContent,
   Chip,
   IconButton,
   Tooltip,
   Typography,
+  alpha,
 } from '@mui/material'
 import {
   ErrorOutline as RedIcon,
@@ -26,74 +25,113 @@ interface ProjectCardProps {
 const statusConfig = {
   RED: {
     label: '遅延あり',
-    color: 'error' as const,
-    icon: <RedIcon fontSize="small" />,
-    bgColor: '#fff5f5',
-    borderColor: '#f44336',
+    icon: <RedIcon sx={{ fontSize: 13 }} />,
+    color: '#ef4444',
+    bg: alpha('#ef4444', 0.08),
+    chipBg: alpha('#ef4444', 0.1),
+    chipColor: '#dc2626',
+    accentBg: alpha('#ef4444', 0.06),
   },
   YELLOW: {
     label: '注意',
-    color: 'warning' as const,
-    icon: <YellowIcon fontSize="small" />,
-    bgColor: '#fffde7',
-    borderColor: '#ff9800',
+    icon: <YellowIcon sx={{ fontSize: 13 }} />,
+    color: '#f59e0b',
+    bg: alpha('#f59e0b', 0.08),
+    chipBg: alpha('#f59e0b', 0.1),
+    chipColor: '#d97706',
+    accentBg: alpha('#f59e0b', 0.06),
   },
   GREEN: {
     label: '正常',
-    color: 'success' as const,
-    icon: <GreenIcon fontSize="small" />,
-    bgColor: '#f1f8e9',
-    borderColor: '#4caf50',
+    icon: <GreenIcon sx={{ fontSize: 13 }} />,
+    color: '#10b981',
+    bg: alpha('#10b981', 0.08),
+    chipBg: alpha('#10b981', 0.1),
+    chipColor: '#059669',
+    accentBg: alpha('#10b981', 0.06),
   },
 }
 
 export default function ProjectCard({ project }: ProjectCardProps) {
   const navigate = useNavigate()
-  const config = statusConfig[project.delay_status]
-  const jiraUrl = JIRA_BASE_URL
-    ? `${JIRA_BASE_URL}/browse/${project.key}`
-    : null
+  const cfg = statusConfig[project.delay_status]
+  const jiraUrl = JIRA_BASE_URL ? `${JIRA_BASE_URL}/browse/${project.key}` : null
 
   return (
-    <Card
-      variant="outlined"
+    <Box
       sx={{
+        bgcolor: 'background.paper',
+        borderRadius: 3,
+        border: '1px solid',
+        borderColor: 'divider',
+        boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.06)',
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        borderLeft: `4px solid ${config.borderColor}`,
-        bgcolor: config.bgColor,
-        transition: 'box-shadow 0.2s',
+        overflow: 'hidden',
+        transition: 'box-shadow 0.2s, transform 0.15s',
         '&:hover': {
-          boxShadow: 3,
+          boxShadow: '0 4px 12px 0 rgb(0 0 0 / 0.1)',
+          transform: 'translateY(-1px)',
         },
       }}
     >
-      <CardContent sx={{ flexGrow: 1, pb: 1 }}>
-        {/* Header: key + status chip + Jira link */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+      {/* Top accent strip */}
+      <Box sx={{ height: 3, bgcolor: cfg.color, flexShrink: 0 }} />
+
+      <Box sx={{ p: 2.5, flexGrow: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {/* Header row */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Typography
             variant="caption"
-            sx={{ fontFamily: 'monospace', color: 'text.secondary', fontWeight: 'bold' }}
+            sx={{
+              fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+              fontSize: '0.7rem',
+              fontWeight: 600,
+              color: 'text.secondary',
+              bgcolor: 'grey.100',
+              px: 0.75,
+              py: 0.25,
+              borderRadius: 1,
+              letterSpacing: '0.02em',
+            }}
           >
             {project.key}
           </Typography>
-          <Chip
-            icon={config.icon}
-            label={config.label}
-            color={config.color}
-            size="small"
-            variant="outlined"
-          />
+
+          {/* Status badge */}
+          <Box
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 0.5,
+              px: 0.875,
+              py: 0.25,
+              borderRadius: 1,
+              bgcolor: cfg.chipBg,
+              color: cfg.chipColor,
+              fontSize: '0.6875rem',
+              fontWeight: 600,
+            }}
+          >
+            {cfg.icon}
+            {cfg.label}
+          </Box>
+
           <Box sx={{ flexGrow: 1 }} />
+
           <Tooltip title="チケット一覧">
             <IconButton
               size="small"
-              color="primary"
-              aria-label="チケット一覧"
               onClick={() => navigate(`/issues?project_id=${project.id}`)}
+              sx={{
+                p: 0.5,
+                color: 'text.secondary',
+                '&:hover': { color: 'primary.main', bgcolor: alpha('#6366f1', 0.08) },
+                borderRadius: 1.5,
+              }}
             >
-              <IssuesIcon fontSize="small" />
+              <IssuesIcon sx={{ fontSize: 16 }} />
             </IconButton>
           </Tooltip>
           {jiraUrl && (
@@ -104,38 +142,59 @@ export default function ProjectCard({ project }: ProjectCardProps) {
                 href={jiraUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                color="primary"
+                sx={{
+                  p: 0.5,
+                  color: 'text.secondary',
+                  '&:hover': { color: 'primary.main', bgcolor: alpha('#6366f1', 0.08) },
+                  borderRadius: 1.5,
+                }}
               >
-                <ExternalLinkIcon fontSize="small" />
+                <ExternalLinkIcon sx={{ fontSize: 16 }} />
               </IconButton>
             </Tooltip>
           )}
         </Box>
 
         {/* Project name */}
-        <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2, lineHeight: 1.4 }}>
+        <Typography
+          variant="subtitle2"
+          fontWeight={600}
+          sx={{ lineHeight: 1.5, color: 'text.primary', flexGrow: 1 }}
+        >
           {project.name}
         </Typography>
 
-        {/* Issue counts */}
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        {/* Issue count chips */}
+        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
           {project.red_count > 0 && (
             <Tooltip title="期限切れチケット数">
               <Chip
                 label={`遅延 ${project.red_count}`}
                 size="small"
-                color="error"
-                sx={{ fontWeight: 'bold' }}
+                sx={{
+                  height: 20,
+                  fontSize: '0.6875rem',
+                  fontWeight: 700,
+                  bgcolor: alpha('#ef4444', 0.1),
+                  color: '#dc2626',
+                  border: 'none',
+                }}
               />
             </Tooltip>
           )}
           {project.yellow_count > 0 && (
-            <Tooltip title="期限切れ間近チケット数（3日以内）">
+            <Tooltip title="期限切れ間近（3日以内）">
               <Chip
                 label={`注意 ${project.yellow_count}`}
                 size="small"
-                color="warning"
-                sx={{ fontWeight: 'bold' }}
+                sx={{
+                  height: 20,
+                  fontSize: '0.6875rem',
+                  fontWeight: 700,
+                  bgcolor: alpha('#f59e0b', 0.1),
+                  color: '#d97706',
+                  border: 'none',
+                }}
               />
             </Tooltip>
           )}
@@ -143,19 +202,32 @@ export default function ProjectCard({ project }: ProjectCardProps) {
             <Chip
               label={`未完了 ${project.open_count}`}
               size="small"
-              variant="outlined"
+              sx={{
+                height: 20,
+                fontSize: '0.6875rem',
+                fontWeight: 500,
+                bgcolor: 'grey.100',
+                color: 'text.secondary',
+                border: 'none',
+              }}
             />
           </Tooltip>
           <Tooltip title="総チケット数">
             <Chip
               label={`全 ${project.total_count}`}
               size="small"
-              variant="outlined"
-              color="default"
+              sx={{
+                height: 20,
+                fontSize: '0.6875rem',
+                fontWeight: 500,
+                bgcolor: 'grey.100',
+                color: 'text.secondary',
+                border: 'none',
+              }}
             />
           </Tooltip>
         </Box>
-      </CardContent>
-    </Card>
+      </Box>
+    </Box>
   )
 }

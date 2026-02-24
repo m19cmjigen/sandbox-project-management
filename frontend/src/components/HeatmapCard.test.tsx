@@ -56,7 +56,7 @@ describe('HeatmapCard', () => {
 
   it('navigates to projects page with org id on click', () => {
     renderCard(makeNode({ id: 42 }))
-    fireEvent.click(screen.getByText('テスト組織').closest('[class*="Paper"]') || document.body)
+    fireEvent.click(screen.getByText('テスト組織'))
     expect(mockNavigate).toHaveBeenCalledWith('/projects?organization_id=42')
   })
 
@@ -67,6 +67,7 @@ describe('HeatmapCard', () => {
 
   it('shows red project count in non-child mode', () => {
     renderCard(makeNode({ red_projects: 3 }), false)
-    expect(screen.getByText(/遅延 3/)).toBeInTheDocument()
+    // The redesigned component renders the count as a standalone number next to a colored dot
+    expect(screen.getByText('3')).toBeInTheDocument()
   })
 })
