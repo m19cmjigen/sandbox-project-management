@@ -57,16 +57,24 @@ func run() error {
 	})
 
 	workerCount, _ := strconv.Atoi(getEnv("BATCH_WORKER_COUNT", "5"))
+	// BATCH_SYNC_MODE: "full"（デフォルト）または "delta"
+	syncMode := getEnv("BATCH_SYNC_MODE", "full")
 
 	repo := batch.NewRepository(db)
 	syncer := batch.NewSyncer(jiraClient, repo, log.Logger, workerCount)
 
-	log.Info("starting full sync batch",
+	log.Info("starting batch",
 		zap.String("jira_base_url", jiraBaseURL),
 		zap.Int("worker_count", workerCount),
+		zap.String("sync_mode", syncMode),
 	)
 
-	return syncer.RunFullSync(context.Background())
+	switch syncMode {
+	case "delta":
+		return syncer.RunDeltaSync(context.Background())
+	default:
+		return syncer.RunFullSync(context.Background())
+	}
 }
 
 func getEnv(key, defaultVal string) string {
