@@ -37,6 +37,8 @@ import { getUnassignedProjects, assignProjectOrganization } from '../api/project
 import type { Organization } from '../types/organization'
 import type { Project } from '../types/project'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { useAuthStore } from '../stores/authStore'
+import { canManageOrganizations, canAssignProjects } from '../utils/permissions'
 
 // ---- Organization tree helpers ----
 
@@ -60,12 +62,13 @@ function buildTree(orgs: Organization[]): OrgNode[] {
 interface OrgTreeItemProps {
   node: OrgNode
   allOrgs: Organization[]
+  canEdit: boolean
   onEdit: (org: Organization) => void
   onDelete: (org: Organization) => void
   onAddChild: (parent: Organization) => void
 }
 
-function OrgTreeItem({ node, allOrgs, onEdit, onDelete, onAddChild }: OrgTreeItemProps) {
+function OrgTreeItem({ node, allOrgs, canEdit, onEdit, onDelete, onAddChild }: OrgTreeItemProps) {
   const canAddChild = node.level < 1 // max 2 levels (0 and 1)
   return (
     <Box>
@@ -91,23 +94,27 @@ function OrgTreeItem({ node, allOrgs, onEdit, onDelete, onAddChild }: OrgTreeIte
           variant="outlined"
           color={node.delay_status === 'RED' ? 'error' : node.delay_status === 'YELLOW' ? 'warning' : 'success'}
         />
-        {canAddChild && (
+        {canEdit && canAddChild && (
           <Tooltip title="子組織を追加">
             <IconButton size="small" onClick={() => onAddChild(node)}>
               <AddIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         )}
-        <Tooltip title="編集">
-          <IconButton size="small" onClick={() => onEdit(node)}>
-            <EditIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="削除">
-          <IconButton size="small" color="error" onClick={() => onDelete(node)}>
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
+        {canEdit && (
+          <Tooltip title="編集">
+            <IconButton size="small" onClick={() => onEdit(node)}>
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
+        {canEdit && (
+          <Tooltip title="削除">
+            <IconButton size="small" color="error" onClick={() => onDelete(node)}>
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
       </Box>
       {node.children.length > 0 && (
         <Box sx={{ pl: 3, borderLeft: '2px solid', borderColor: 'divider', ml: 1.5, mt: 0.5 }}>
@@ -116,6 +123,7 @@ function OrgTreeItem({ node, allOrgs, onEdit, onDelete, onAddChild }: OrgTreeIte
               key={child.id}
               node={child}
               allOrgs={allOrgs}
+              canEdit={canEdit}
               onEdit={onEdit}
               onDelete={onDelete}
               onAddChild={onAddChild}
@@ -130,6 +138,10 @@ function OrgTreeItem({ node, allOrgs, onEdit, onDelete, onAddChild }: OrgTreeIte
 // ---- Main page ----
 
 export default function OrganizationManagement() {
+  const currentUser = useAuthStore((s) => s.user)
+  const orgEditEnabled    = currentUser ? canManageOrganizations(currentUser.role) : false
+  const assignEnabled     = currentUser ? canAssignProjects(currentUser.role) : false
+
   const [orgs, setOrgs] = useState<Organization[]>([])
   const [unassignedProjects, setUnassignedProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -291,14 +303,16 @@ export default function OrganizationManagement() {
           <Paper variant="outlined" sx={{ flex: 1, p: 2, minWidth: 0 }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
               <Typography variant="h6">組織ツリー</Typography>
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={<AddIcon />}
-                onClick={() => openCreateDialog()}
-              >
-                本部を追加
-              </Button>
+              {orgEditEnabled && (
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<AddIcon />}
+                  onClick={() => openCreateDialog()}
+                >
+                  本部を追加
+                </Button>
+              )}
             </Stack>
             <Divider sx={{ mb: 1.5 }} />
             {roots.length === 0 ? (
@@ -311,6 +325,7 @@ export default function OrganizationManagement() {
                   key={root.id}
                   node={root}
                   allOrgs={orgs}
+                  canEdit={orgEditEnabled}
                   onEdit={openEditDialog}
                   onDelete={openDeleteDialog}
                   onAddChild={(parent) => openCreateDialog(parent)}
@@ -339,16 +354,18 @@ export default function OrganizationManagement() {
                     key={project.id}
                     divider
                     secondaryAction={
-                      <Tooltip title="組織に紐付け">
-                        <IconButton
-                          size="small"
-                          color="primary"
-                          onClick={() => openAssignDialog(project)}
-                          disabled={orgs.length === 0}
-                        >
-                          <AssignIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      assignEnabled ? (
+                        <Tooltip title="組織に紐付け">
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => openAssignDialog(project)}
+                            disabled={orgs.length === 0}
+                          >
+                            <AssignIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      ) : undefined
                     }
                   >
                     <ListItemText
