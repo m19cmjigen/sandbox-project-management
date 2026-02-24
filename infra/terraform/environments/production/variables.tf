@@ -29,3 +29,14 @@ variable "jira_secret_arn" {
   description = "ARN of the Secrets Manager secret for Jira credentials"
   type        = string
 }
+
+variable "cf_acm_certificate_arn" {
+  description = "ARN of the ACM certificate for CloudFront (must be in us-east-1)"
+  type        = string
+}
+
+variable "cf_domain_names" {
+  description = "Custom domain names for the CloudFront distribution"
+  type        = list(string)
+  default     = []
+}

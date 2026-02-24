@@ -104,6 +104,25 @@ module "ecs" {
 }
 
 # ---------------------------------------------------------------------------
+# CloudFront + S3 Module
+# ---------------------------------------------------------------------------
+module "cloudfront" {
+  source = "../../modules/cloudfront"
+
+  project     = local.project
+  environment = local.environment
+
+  # ACM certificate must be issued in us-east-1 for CloudFront
+  acm_certificate_arn = var.cf_acm_certificate_arn
+  domain_names        = var.cf_domain_names
+
+  # PriceClass_All: global edge locations for production
+  price_class = "PriceClass_All"
+
+  tags = local.common_tags
+}
+
+# ---------------------------------------------------------------------------
 # IAM Module
 # ---------------------------------------------------------------------------
 module "iam" {
