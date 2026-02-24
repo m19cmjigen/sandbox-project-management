@@ -73,6 +73,94 @@ func (s *Syncer) RunFullSync(ctx context.Context) error {
 	return syncErr
 }
 
+// RunDeltaSync fetches only the issues updated since the last successful DELTA sync
+// and upserts them into the DB. It records execution details in the sync_logs table.
+func (s *Syncer) RunDeltaSync(ctx context.Context) error {
+	start := time.Now()
+	s.log.Info("delta sync started")
+
+	logID, err := s.repo.StartSyncLog(ctx, "DELTA")
+	if err != nil {
+		return fmt.Errorf("start sync log: %w", err)
+	}
+
+	issuesSynced, syncErr := s.runDeltaSync(ctx)
+
+	// sync_logs の更新は sync 失敗でも必ず行う
+	status := "SUCCESS"
+	errMsg := ""
+	if syncErr != nil {
+		status = "FAILURE"
+		errMsg = syncErr.Error()
+	}
+
+	if finishErr := s.repo.FinishSyncLog(ctx, logID, status, 0, issuesSynced, errMsg); finishErr != nil {
+		s.log.Error("failed to finish sync log", zap.Error(finishErr))
+	}
+
+	s.log.Info("delta sync finished",
+		zap.String("status", status),
+		zap.Int("issues_synced", issuesSynced),
+		zap.Duration("duration", time.Since(start)),
+	)
+
+	return syncErr
+}
+
+// runDeltaSync fetches issues updated since the last successful DELTA sync and upserts them.
+func (s *Syncer) runDeltaSync(ctx context.Context) (issuesSynced int, err error) {
+	// 1. 前回成功した DELTA sync の実行時刻を取得
+	lastSync, err := s.repo.GetLastSuccessfulSyncTime(ctx, "DELTA")
+	if err != nil {
+		return 0, fmt.Errorf("get last successful sync time: %w", err)
+	}
+
+	// フォールバック: 前回記録がなければ1時間前を使用
+	var since time.Time
+	if lastSync != nil {
+		since = *lastSync
+	} else {
+		since = time.Now().Add(-1 * time.Hour)
+		s.log.Info("no previous delta sync found, using 1-hour fallback")
+	}
+
+	// 2. JQL でプロジェクト横断の差分チケットを一括取得
+	jql := fmt.Sprintf(`updated >= "%s" ORDER BY updated ASC`, since.Format("2006/01/02 15:04"))
+	s.log.Info("fetching delta issues",
+		zap.String("since", since.Format(time.RFC3339)),
+		zap.String("jql", jql),
+	)
+
+	issues, err := s.jira.SearchIssues(jiraclient.IssueSearchOptions{JQL: jql})
+	if err != nil {
+		return 0, fmt.Errorf("search delta issues: %w", err)
+	}
+	s.log.Info("fetched delta issues", zap.Int("count", len(issues)))
+
+	if len(issues) == 0 {
+		return 0, nil
+	}
+
+	// 3. チケットに対応する project_id を解決
+	projectIDMap, err := s.repo.GetProjectIDMap(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("get project id map: %w", err)
+	}
+
+	// 4. チケットを正規化して DB に upsert
+	now := normalizer.Now()
+	dbIssues := make([]normalizer.DBIssue, len(issues))
+	for i, issue := range issues {
+		dbIssues[i] = normalizer.ConvertIssue(issue, now)
+	}
+	issuesSynced, err = s.repo.UpsertIssues(ctx, dbIssues, projectIDMap)
+	if err != nil {
+		return 0, fmt.Errorf("upsert issues: %w", err)
+	}
+
+	return issuesSynced, nil
+}
+
 // runSync is the core sync logic, separated for testability.
 // Returns the number of projects and issues synced, plus any error.
 func (s *Syncer) runSync(ctx context.Context) (projectsSynced, issuesSynced int, err error) {

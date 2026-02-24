@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -51,6 +52,8 @@ type mockRepository struct {
 	getProjectMapErr  error
 	startLogErr       error
 	finishLogErr      error
+	lastSyncTime      *time.Time
+	lastSyncTimeErr   error
 }
 
 func (m *mockRepository) UpsertProjects(_ context.Context, projects []normalizer.DBProject) (int, error) {
@@ -75,6 +78,10 @@ func (m *mockRepository) FinishSyncLog(_ context.Context, _ int64, status string
 	m.finishedStatus = status
 	m.finishedErrMsg = errMsg
 	return m.finishLogErr
+}
+
+func (m *mockRepository) GetLastSuccessfulSyncTime(_ context.Context, _ string) (*time.Time, error) {
+	return m.lastSyncTime, m.lastSyncTimeErr
 }
 
 // ----------------------------------------------------------------
@@ -246,5 +253,110 @@ func TestNewSyncer_DefaultWorkerCount(t *testing.T) {
 	s := NewSyncer(nil, nil, zap.NewNop(), 0)
 	if s.workerCount != defaultWorkerCount {
 		t.Errorf("expected default worker count %d, got %d", defaultWorkerCount, s.workerCount)
+	}
+}
+
+// ----------------------------------------------------------------
+// Delta Sync Tests
+// ----------------------------------------------------------------
+
+func TestRunDeltaSync_Success(t *testing.T) {
+	lastSync := time.Now().Add(-30 * time.Minute)
+	jira := &mockJiraClient{
+		issues: []jiraclient.Issue{makeIssue("1", "PROJ-1", "10")},
+	}
+	repo := &mockRepository{
+		syncLogID:    42,
+		lastSyncTime: &lastSync,
+		projectIDMap: map[string]int64{"10": 1},
+	}
+
+	syncer := newTestSyncer(jira, repo)
+	err := syncer.RunDeltaSync(context.Background())
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if repo.upsertIssuesCount != 1 {
+		t.Errorf("expected 1 issue upserted, got %d", repo.upsertIssuesCount)
+	}
+	if repo.finishedStatus != "SUCCESS" {
+		t.Errorf("expected SUCCESS status, got %s", repo.finishedStatus)
+	}
+}
+
+func TestRunDeltaSync_NoLastSync_UsesFallback(t *testing.T) {
+	// 前回の記録がない場合は1時間前をフォールバックとして使用し、正常に完了する
+	jira := &mockJiraClient{
+		issues: []jiraclient.Issue{makeIssue("1", "PROJ-1", "10")},
+	}
+	repo := &mockRepository{
+		syncLogID:    1,
+		lastSyncTime: nil, // 前回記録なし
+		projectIDMap: map[string]int64{"10": 1},
+	}
+
+	syncer := newTestSyncer(jira, repo)
+	err := syncer.RunDeltaSync(context.Background())
+	if err != nil {
+		t.Fatalf("expected no error with fallback, got: %v", err)
+	}
+	if repo.finishedStatus != "SUCCESS" {
+		t.Errorf("expected SUCCESS, got %s", repo.finishedStatus)
+	}
+}
+
+func TestRunDeltaSync_NoIssues(t *testing.T) {
+	lastSync := time.Now().Add(-10 * time.Minute)
+	jira := &mockJiraClient{issues: []jiraclient.Issue{}}
+	repo := &mockRepository{
+		syncLogID:    1,
+		lastSyncTime: &lastSync,
+		projectIDMap: map[string]int64{},
+	}
+
+	syncer := newTestSyncer(jira, repo)
+	err := syncer.RunDeltaSync(context.Background())
+	if err != nil {
+		t.Fatalf("expected no error for empty issues, got: %v", err)
+	}
+	if repo.upsertIssuesCount != 0 {
+		t.Errorf("expected 0 issues upserted, got %d", repo.upsertIssuesCount)
+	}
+	if repo.finishedStatus != "SUCCESS" {
+		t.Errorf("expected SUCCESS, got %s", repo.finishedStatus)
+	}
+}
+
+func TestRunDeltaSync_SearchError(t *testing.T) {
+	lastSync := time.Now().Add(-1 * time.Hour)
+	jira := &mockJiraClient{issuesErr: errors.New("jira search failed")}
+	repo := &mockRepository{
+		syncLogID:    1,
+		lastSyncTime: &lastSync,
+	}
+
+	syncer := newTestSyncer(jira, repo)
+	err := syncer.RunDeltaSync(context.Background())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if repo.finishedStatus != "FAILURE" {
+		t.Errorf("expected FAILURE status, got %s", repo.finishedStatus)
+	}
+	if repo.finishedErrMsg == "" {
+		t.Error("expected non-empty error message in sync log")
+	}
+}
+
+func TestRunDeltaSync_SyncLogAlwaysFinished(t *testing.T) {
+	// Jira エラーでも sync_log は必ず更新される
+	jira := &mockJiraClient{issuesErr: errors.New("timeout")}
+	repo := &mockRepository{syncLogID: 99}
+
+	syncer := newTestSyncer(jira, repo)
+	syncer.RunDeltaSync(context.Background())
+
+	if repo.finishedStatus == "" {
+		t.Error("FinishSyncLog must be called even when delta sync fails")
 	}
 }

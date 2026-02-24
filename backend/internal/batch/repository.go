@@ -2,6 +2,7 @@ package batch
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -22,6 +23,9 @@ type Repository interface {
 	StartSyncLog(ctx context.Context, syncType string) (int64, error)
 	// FinishSyncLog updates the sync_log record with the final status.
 	FinishSyncLog(ctx context.Context, id int64, status string, projectsSynced, issuesSynced int, errMsg string) error
+	// GetLastSuccessfulSyncTime returns the executed_at of the most recent successful sync log
+	// for the given syncType. Returns nil if no successful sync has been recorded.
+	GetLastSuccessfulSyncTime(ctx context.Context, syncType string) (*time.Time, error)
 }
 
 // sqlxRepository is the PostgreSQL implementation of Repository.
@@ -108,18 +112,18 @@ func (r *sqlxRepository) UpsertIssues(ctx context.Context, issues []normalizer.D
 			updated_at          = CURRENT_TIMESTAMP`
 
 	type row struct {
-		JiraIssueID       string  `db:"jira_issue_id"`
-		JiraIssueKey      string  `db:"jira_issue_key"`
-		ProjectID         int64   `db:"project_id"`
-		Summary           string  `db:"summary"`
-		Status            string  `db:"status"`
-		StatusCategory    string  `db:"status_category"`
-		DueDate           *string `db:"due_date"`
-		AssigneeName      string  `db:"assignee_name"`
-		AssigneeAccountID string  `db:"assignee_account_id"`
-		DelayStatus       string  `db:"delay_status"`
-		Priority          string  `db:"priority"`
-		IssueType         string  `db:"issue_type"`
+		JiraIssueID       string    `db:"jira_issue_id"`
+		JiraIssueKey      string    `db:"jira_issue_key"`
+		ProjectID         int64     `db:"project_id"`
+		Summary           string    `db:"summary"`
+		Status            string    `db:"status"`
+		StatusCategory    string    `db:"status_category"`
+		DueDate           *string   `db:"due_date"`
+		AssigneeName      string    `db:"assignee_name"`
+		AssigneeAccountID string    `db:"assignee_account_id"`
+		DelayStatus       string    `db:"delay_status"`
+		Priority          string    `db:"priority"`
+		IssueType         string    `db:"issue_type"`
 		LastUpdatedAt     time.Time `db:"last_updated_at"`
 	}
 
@@ -188,6 +192,21 @@ func (r *sqlxRepository) StartSyncLog(ctx context.Context, syncType string) (int
 		return 0, fmt.Errorf("start sync log: %w", err)
 	}
 	return id, nil
+}
+
+func (r *sqlxRepository) GetLastSuccessfulSyncTime(ctx context.Context, syncType string) (*time.Time, error) {
+	var t time.Time
+	err := r.db.QueryRowContext(ctx,
+		`SELECT executed_at FROM sync_logs WHERE sync_type = $1 AND status = 'SUCCESS' ORDER BY executed_at DESC LIMIT 1`,
+		syncType,
+	).Scan(&t)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get last successful sync time: %w", err)
+	}
+	return &t, nil
 }
 
 func (r *sqlxRepository) FinishSyncLog(ctx context.Context, id int64, status string, projectsSynced, issuesSynced int, errMsg string) error {
