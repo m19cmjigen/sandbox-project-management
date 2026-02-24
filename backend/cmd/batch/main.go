@@ -15,6 +15,7 @@ import (
 	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/jiraclient"
 	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/logger"
 	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/metrics"
+	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/secrets"
 )
 
 func main() {
@@ -43,18 +44,18 @@ func run() error {
 	}
 	defer db.Close()
 
-	// Jira クライアント
-	jiraBaseURL := getEnv("JIRA_BASE_URL", "")
-	jiraEmail := getEnv("JIRA_EMAIL", "")
-	jiraAPIToken := getEnv("JIRA_API_TOKEN", "")
-	if jiraBaseURL == "" || jiraEmail == "" || jiraAPIToken == "" {
-		return fmt.Errorf("JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN must be set")
+	// Jira 認証情報を環境変数から読み込む
+	// 本番環境では ECS タスク定義の secrets フィールドで AWS Secrets Manager から注入される
+	// 詳細は docs/secrets-management.md を参照
+	jiraCreds, err := secrets.LoadJira()
+	if err != nil {
+		return fmt.Errorf("load jira credentials: %w", err)
 	}
 
 	jiraClient := jiraclient.New(jiraclient.Config{
-		BaseURL:  jiraBaseURL,
-		Email:    jiraEmail,
-		APIToken: jiraAPIToken,
+		BaseURL:  jiraCreds.BaseURL,
+		Email:    jiraCreds.Email,
+		APIToken: jiraCreds.APIToken,
 	})
 
 	workerCount, _ := strconv.Atoi(getEnv("BATCH_WORKER_COUNT", "5"))
@@ -73,7 +74,7 @@ func run() error {
 	}
 
 	log.Info("starting batch",
-		zap.String("jira_base_url", jiraBaseURL),
+		zap.String("jira_base_url", jiraCreds.BaseURL),
 		zap.Int("worker_count", workerCount),
 		zap.String("sync_mode", syncMode),
 	)
