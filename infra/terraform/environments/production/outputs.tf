@@ -57,3 +57,18 @@ output "aurora_db_secret_arn" {
   description = "Secrets Manager ARN for DB credentials"
   value       = module.aurora.db_secret_arn
 }
+
+output "alb_dns_name" {
+  description = "ALB DNS name (configure Route 53 CNAME to this)"
+  value       = module.ecs.alb_dns_name
+}
+
+output "api_ecr_repository_url" {
+  description = "ECR repository URL for API image"
+  value       = module.ecs.api_ecr_repository_url
+}
+
+output "batch_ecr_repository_url" {
+  description = "ECR repository URL for batch image"
+  value       = module.ecs.batch_ecr_repository_url
+}

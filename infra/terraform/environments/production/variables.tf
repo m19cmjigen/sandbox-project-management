@@ -14,3 +14,18 @@ variable "github_repo" {
   type        = string
   default     = "m19cmjigen/sandbox-project-management"
 }
+
+variable "acm_certificate_arn" {
+  description = "ARN of the ACM certificate for HTTPS on ALB"
+  type        = string
+}
+
+variable "jwt_secret_arn" {
+  description = "ARN of the Secrets Manager secret for JWT_SECRET"
+  type        = string
+}
+
+variable "jira_secret_arn" {
+  description = "ARN of the Secrets Manager secret for Jira credentials"
+  type        = string
+}
