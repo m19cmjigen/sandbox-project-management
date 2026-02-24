@@ -39,6 +39,11 @@ func main() {
 		zap.String("gin_mode", cfg.Server.GinMode),
 	)
 
+	// 本番モードでデフォルトのJWT_SECRETが使われていれば警告を出す
+	if cfg.Server.GinMode == "release" && cfg.Auth.JWTSecret == "dev-secret-change-in-production" {
+		log.Warn("SECURITY WARNING: JWT_SECRET is using the insecure default value in release mode. Set JWT_SECRET environment variable to a strong random secret.")
+	}
+
 	// データベース接続
 	db, err := sqlx.Connect("postgres", cfg.Database.GetDSN())
 	if err != nil {
