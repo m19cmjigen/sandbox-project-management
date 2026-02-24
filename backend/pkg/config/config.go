@@ -13,6 +13,15 @@ type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
 	Log      LogConfig
+	Auth     AuthConfig
+}
+
+// AuthConfig はAPI認証設定
+type AuthConfig struct {
+	// JWTSecret は JWT 署名鍵。本番環境では環境変数 JWT_SECRET で必ず上書きすること。
+	JWTSecret      string
+	// AllowedOrigins は CORS で許可するオリジンのカンマ区切りリスト。空の場合は全オリジン許可。
+	AllowedOrigins string
 }
 
 // ServerConfig はサーバー設定
@@ -63,6 +72,11 @@ func Load() (*Config, error) {
 		Log: LogConfig{
 			Level:  getEnv("LOG_LEVEL", "debug"),
 			Format: getEnv("LOG_FORMAT", "json"),
+		},
+		Auth: AuthConfig{
+			// デフォルト値は開発用。本番環境では必ず JWT_SECRET 環境変数で上書きすること。
+			JWTSecret:      getEnv("JWT_SECRET", "dev-secret-change-in-production"),
+			AllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", ""),
 		},
 	}
 
