@@ -2,11 +2,13 @@ package router
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/zap"
 
+	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/auth"
 	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/config"
 	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/logger"
 )
@@ -18,52 +20,71 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 
 	r := gin.New()
 
-	// ミドルウェア設定
+	tm := auth.NewTokenManager(cfg.Auth.JWTSecret)
+
+	// 共通ミドルウェア
 	r.Use(gin.Recovery())
 	r.Use(LoggerMiddleware(log))
-	r.Use(CORSMiddleware())
+	r.Use(SecurityHeadersMiddleware())
+	r.Use(CORSMiddleware(cfg.Auth.AllowedOrigins))
 
-	// ヘルスチェックエンドポイント
+	// 公開エンドポイント（認証不要）
 	r.GET("/health", healthCheckHandler(db))
 	r.GET("/ready", readinessCheckHandler(db))
 
-	// API v1 ルートグループ
+	// API v1
 	v1 := r.Group("/api/v1")
 	{
-		// 組織管理
-		organizations := v1.Group("/organizations")
+		// 認証エンドポイント（JWT不要）
+		authGroup := v1.Group("/auth")
 		{
-			organizations.GET("", listOrganizationsHandlerWithDB(db))
-			organizations.GET("/:id", getOrganizationHandlerWithDB(db))
-			organizations.POST("", createOrganizationHandlerWithDB(db))
-			organizations.PUT("/:id", updateOrganizationHandlerWithDB(db))
-			organizations.DELETE("/:id", deleteOrganizationHandlerWithDB(db))
-			organizations.GET("/:id/children", getChildOrganizationsHandlerWithDB(db))
+			authGroup.POST("/login", loginHandler(db, tm))
 		}
 
-		// プロジェクト管理
-		projects := v1.Group("/projects")
+		// 認証が必要なエンドポイント
+		protected := v1.Group("")
+		protected.Use(auth.Middleware(tm))
 		{
-			projects.GET("", listProjectsHandlerWithDB(db))
-			projects.GET("/:id", getProjectHandlerWithDB(db))
-			projects.PUT("/:id", updateProjectHandler)
-			projects.PUT("/:id/organization", assignProjectToOrganizationHandlerWithDB(db))
-			projects.GET("/:id/issues", listProjectIssuesHandler)
-		}
+			// 認証ユーザー情報
+			protected.GET("/auth/me", meHandler())
 
-		// チケット管理
-		issues := v1.Group("/issues")
-		{
-			issues.GET("", listIssuesHandlerWithDB(db))
-			issues.GET("/:id", getIssueHandlerWithDB(db))
-		}
+			// 組織管理
+			organizations := protected.Group("/organizations")
+			{
+				organizations.GET("", listOrganizationsHandlerWithDB(db))
+				organizations.GET("/:id", getOrganizationHandlerWithDB(db))
+				organizations.GET("/:id/children", getChildOrganizationsHandlerWithDB(db))
+				// admin のみ書き込み可
+				organizations.POST("", auth.RequireRole("admin"), createOrganizationHandlerWithDB(db))
+				organizations.PUT("/:id", auth.RequireRole("admin"), updateOrganizationHandlerWithDB(db))
+				organizations.DELETE("/:id", auth.RequireRole("admin"), deleteOrganizationHandlerWithDB(db))
+			}
 
-		// ダッシュボード
-		dashboard := v1.Group("/dashboard")
-		{
-			dashboard.GET("/summary", getDashboardSummaryHandlerWithDB(db))
-			dashboard.GET("/organizations/:id", getOrganizationSummaryHandlerWithDB(db))
-			dashboard.GET("/projects/:id", getProjectSummaryHandler)
+			// プロジェクト管理
+			projects := protected.Group("/projects")
+			{
+				projects.GET("", listProjectsHandlerWithDB(db))
+				projects.GET("/:id", getProjectHandlerWithDB(db))
+				projects.GET("/:id/issues", listProjectIssuesHandler)
+				// admin のみ書き込み可
+				projects.PUT("/:id", auth.RequireRole("admin"), updateProjectHandler)
+				projects.PUT("/:id/organization", auth.RequireRole("admin"), assignProjectToOrganizationHandlerWithDB(db))
+			}
+
+			// チケット管理（読み取り専用）
+			issues := protected.Group("/issues")
+			{
+				issues.GET("", listIssuesHandlerWithDB(db))
+				issues.GET("/:id", getIssueHandlerWithDB(db))
+			}
+
+			// ダッシュボード（読み取り専用）
+			dashboard := protected.Group("/dashboard")
+			{
+				dashboard.GET("/summary", getDashboardSummaryHandlerWithDB(db))
+				dashboard.GET("/organizations/:id", getOrganizationSummaryHandlerWithDB(db))
+				dashboard.GET("/projects/:id", getProjectSummaryHandler)
+			}
 		}
 	}
 
@@ -90,16 +111,52 @@ func LoggerMiddleware(log *logger.Logger) gin.HandlerFunc {
 	}
 }
 
-// CORSMiddleware はCORS設定を行うミドルウェア
-func CORSMiddleware() gin.HandlerFunc {
+// SecurityHeadersMiddleware はセキュリティ関連HTTPヘッダーを設定するミドルウェア
+func SecurityHeadersMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("X-Content-Type-Options", "nosniff")
+		c.Writer.Header().Set("X-Frame-Options", "DENY")
+		c.Writer.Header().Set("X-XSS-Protection", "1; mode=block")
+		c.Writer.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		c.Writer.Header().Set("Content-Security-Policy", "default-src 'none'")
+		c.Next()
+	}
+}
+
+// CORSMiddleware はCORS設定を行うミドルウェア。
+// allowedOrigins にカンマ区切りでオリジンを指定する。空の場合はワイルドカード（開発用）。
+func CORSMiddleware(allowedOrigins string) gin.HandlerFunc {
+	// 許可オリジンセットを事前構築
+	originSet := make(map[string]struct{})
+	if allowedOrigins != "" {
+		for _, o := range strings.Split(allowedOrigins, ",") {
+			if o = strings.TrimSpace(o); o != "" {
+				originSet[o] = struct{}{}
+			}
+		}
+	}
+
+	return func(c *gin.Context) {
+		origin := c.Request.Header.Get("Origin")
+
+		allowOrigin := "*"
+		if len(originSet) > 0 {
+			if _, ok := originSet[origin]; ok {
+				allowOrigin = origin
+			} else {
+				// 許可されていないオリジンには CORS ヘッダーを付与しない
+				c.Next()
+				return
+			}
+		}
+
+		c.Writer.Header().Set("Access-Control-Allow-Origin", allowOrigin)
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Origin, Cache-Control")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
 
 		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
+			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
 
