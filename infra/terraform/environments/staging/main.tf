@@ -63,6 +63,47 @@ module "vpc" {
 }
 
 # ---------------------------------------------------------------------------
+# ECS Module
+# ---------------------------------------------------------------------------
+module "ecs" {
+  source = "../../modules/ecs"
+
+  project     = local.project
+  environment = local.environment
+  aws_region  = var.aws_region
+
+  vpc_id             = module.vpc.vpc_id
+  public_subnet_ids  = module.vpc.public_subnet_ids
+  private_subnet_ids = module.vpc.private_subnet_ids
+  alb_sg_id          = module.vpc.alb_sg_id
+  api_sg_id          = module.vpc.api_sg_id
+
+  ecs_task_execution_role_arn = module.iam.ecs_task_execution_role_arn
+  api_task_role_arn           = module.iam.api_task_role_arn
+  batch_task_role_arn         = module.iam.batch_task_role_arn
+
+  db_secret_arn        = module.aurora.db_secret_arn
+  jwt_secret_arn       = var.jwt_secret_arn
+  jira_secret_arn      = var.jira_secret_arn
+  acm_certificate_arn  = var.acm_certificate_arn
+
+  api_log_group_name   = module.vpc.api_log_group_name
+  batch_log_group_name = module.vpc.batch_log_group_name
+
+  # staging: smaller tasks, single instance
+  api_cpu           = 512
+  api_memory        = 1024
+  api_desired_count = 1
+  api_min_count     = 1
+  api_max_count     = 2
+
+  batch_cpu    = 512
+  batch_memory = 1024
+
+  tags = local.common_tags
+}
+
+# ---------------------------------------------------------------------------
 # IAM Module
 # ---------------------------------------------------------------------------
 module "iam" {
