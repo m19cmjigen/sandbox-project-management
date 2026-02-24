@@ -139,15 +139,29 @@ FROM pg_catalog.pg_statio_user_tables
 ORDER BY pg_total_relation_size(relid) DESC;
 ```
 
-## Jiraデータ同期 (将来実装)
+## Jiraデータ同期
 
-現在はシードデータのみ。将来のバッチ同期実装後は以下を実施します。
+バッチ処理でJiraのプロジェクト・チケットをDBに同期します。
+初回セットアップ手順は [docs/jira-setup.md](./jira-setup.md) を参照してください。
+
+### 手動でバッチを実行する
+
+```bash
+cd backend
+
+# フル同期（全件）
+go build -o bin/batch ./cmd/batch/ && ./bin/batch
+
+# 差分同期（前回以降の変更のみ）
+BATCH_SYNC_MODE=delta ./bin/batch
+```
 
 ### 同期ステータス確認
 
 ```sql
 -- 最新の同期ログを確認
-SELECT *
+SELECT sync_type, status, projects_synced, issues_synced,
+       duration_seconds, executed_at, error_message
 FROM sync_logs
 ORDER BY executed_at DESC
 LIMIT 10;
@@ -159,12 +173,10 @@ WHERE status = 'FAILURE'
 ORDER BY executed_at DESC;
 ```
 
-### 手動フル同期 (将来実装予定)
+### バッチスケジュール（本番）
 
-```bash
-# フル同期を手動実行
-curl -X POST http://localhost:8080/api/v1/admin/sync/full
-```
+本番環境では CloudWatch EventBridge で自動実行します。
+詳細は [docs/batch-schedule.md](./batch-schedule.md) を参照してください。
 
 ## セキュリティ運用
 

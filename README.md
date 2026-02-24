@@ -116,6 +116,23 @@ npm run dev
 - フロントエンド: http://localhost:3000
 - バックエンドAPI: http://localhost:8080
 
+### Jira連携のセットアップ
+
+Jiraからプロジェクト・チケットを取得するバッチ処理を使う場合は、追加でJira認証情報の設定が必要です。
+
+```bash
+# 1. APIトークンを https://id.atlassian.com/manage-profile/security/api-tokens で発行
+
+# 2. .env に認証情報を追加
+cd backend && cp .env.example .env
+# .env の JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN を設定
+
+# 3. バッチを実行
+go build -o bin/batch ./cmd/batch/ && ./bin/batch
+```
+
+詳細な手順（権限設定・確認方法・トラブルシューティング）: [docs/jira-setup.md](docs/jira-setup.md)
+
 ### 個別セットアップ
 
 #### データベース
@@ -306,15 +323,32 @@ aws cloudfront create-invalidation --distribution-id XXX --paths "/*"
 ## 環境変数
 
 ### Backend (.env)
-```
+
+```env
+# サーバー
 PORT=8080
+GIN_MODE=debug
+
+# データベース
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=admin
 DB_PASSWORD=admin123
 DB_NAME=project_visualization
-LOG_LEVEL=debug
+DB_SSLMODE=disable
+
+# Jira連携（バッチ処理に必要）
+JIRA_BASE_URL=https://your-org.atlassian.net
+JIRA_EMAIL=your-email@example.com
+JIRA_API_TOKEN=your-api-token-here
+
+# バッチ設定
+BATCH_SYNC_MODE=full       # full または delta
+BATCH_WORKER_COUNT=5       # 並列フェッチ数
 ```
+
+テンプレート: `backend/.env.example`
+Jira APIトークンの取得方法: [docs/jira-setup.md](docs/jira-setup.md)
 
 ### Frontend
 API通信は `/api` プレフィックスを使用し、Viteプロキシで `http://localhost:8080` に転送。
@@ -322,10 +356,13 @@ API通信は `/api` プレフィックスを使用し、Viteプロキシで `htt
 ## ドキュメント
 
 - [SPEC.md](SPEC.md) - プロジェクト要件定義書
+- [docs/jira-setup.md](docs/jira-setup.md) - **Jira連携セットアップガイド**
+- [docs/secrets-management.md](docs/secrets-management.md) - Jira認証情報のセキュア管理（本番環境）
+- [docs/batch-schedule.md](docs/batch-schedule.md) - バッチスケジュール設定
+- [docs/deploy.md](docs/deploy.md) - デプロイ手順書
+- [docs/operations.md](docs/operations.md) - 運用手順書
 - [database/README.md](database/README.md) - データベース管理
 - [database/schema/schema_design.md](database/schema/schema_design.md) - スキーマ設計書
-- [backend/README.md](backend/README.md) - バックエンドAPI
-- [frontend/README.md](frontend/README.md) - フロントエンド
 - [tickets/README.md](tickets/README.md) - 開発チケット一覧
 
 ## トラブルシューティング
