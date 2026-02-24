@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
 import {
   Box,
-  Card,
-  CardContent,
   Divider,
   Grid,
   Stack,
   Typography,
+  alpha,
 } from '@mui/material'
 import {
   ErrorOutline as RedIcon,
@@ -32,20 +31,55 @@ interface SummaryCardProps {
 
 function SummaryCard({ label, value, sublabel, subvalue, color, icon }: SummaryCardProps) {
   return (
-    <Card variant="outlined" sx={{ height: '100%', borderTop: `4px solid ${color}` }}>
-      <CardContent>
-        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-          <Box sx={{ color }}>{icon}</Box>
-          <Typography variant="body2" color="text.secondary">{label}</Typography>
-        </Stack>
-        <Typography variant="h4" fontWeight="bold" color={color}>{value}</Typography>
+    <Box
+      sx={{
+        bgcolor: 'background.paper',
+        borderRadius: 3,
+        p: 3,
+        border: '1px solid',
+        borderColor: 'divider',
+        boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.06)',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Typography variant="body2" color="text.secondary" fontWeight={500}>
+          {label}
+        </Typography>
+        <Box
+          sx={{
+            width: 36,
+            height: 36,
+            borderRadius: 2,
+            bgcolor: alpha(color, 0.12),
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color,
+            flexShrink: 0,
+          }}
+        >
+          {icon}
+        </Box>
+      </Box>
+      <Box>
+        <Typography variant="h3" fontWeight={700} color="text.primary" lineHeight={1}>
+          {value}
+        </Typography>
         {sublabel && subvalue !== undefined && (
-          <Typography variant="caption" color="text.secondary">
-            {sublabel}: {subvalue}件
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            {sublabel} {subvalue.toLocaleString()}件
           </Typography>
         )}
-      </CardContent>
-    </Card>
+      </Box>
+      {/* Bottom accent bar */}
+      <Box sx={{ height: 3, bgcolor: alpha(color, 0.25), borderRadius: 1, mt: 'auto' }}>
+        <Box sx={{ height: '100%', width: '60%', bgcolor: color, borderRadius: 1 }} />
+      </Box>
+    </Box>
   )
 }
 
@@ -62,14 +96,10 @@ function OrgHeatmap({ roots }: { roots: DashboardOrgNode[] }) {
     <Stack spacing={3}>
       {roots.map((root) => (
         <Box key={root.id}>
-          {/* Root org (level 0) */}
           <Grid container spacing={2} alignItems="stretch">
-            {/* Root card: takes up fixed width */}
             <Grid item xs={12} sm={4} md={3}>
               <HeatmapCard node={root} />
             </Grid>
-
-            {/* Child orgs */}
             {root.children.length > 0 && (
               <Grid item xs={12} sm={8} md={9}>
                 <Grid container spacing={1.5} sx={{ height: '100%' }}>
@@ -82,7 +112,7 @@ function OrgHeatmap({ roots }: { roots: DashboardOrgNode[] }) {
               </Grid>
             )}
           </Grid>
-          <Divider sx={{ mt: 3 }} />
+          <Divider sx={{ mt: 3, borderColor: 'divider' }} />
         </Box>
       ))}
     </Stack>
@@ -121,7 +151,15 @@ export default function Dashboard() {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ mb: 3 }}>ダッシュボード</Typography>
+      {/* Page header */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" fontWeight={700} color="text.primary">
+          ダッシュボード
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          全社プロジェクトの進捗状況
+        </Typography>
+      </Box>
 
       {error && <ErrorMessage message={error} onRetry={handleRetry} />}
 
@@ -130,15 +168,15 @@ export default function Dashboard() {
       ) : summary && (
         <>
           {/* Summary cards */}
-          <Grid container spacing={2} sx={{ mb: 4 }}>
+          <Grid container spacing={2.5} sx={{ mb: 5 }}>
             <Grid item xs={6} sm={3}>
               <SummaryCard
                 label="総プロジェクト"
                 value={summary.total_projects}
                 sublabel="チケット"
                 subvalue={summary.total_issues}
-                color="#1976d2"
-                icon={<FolderIcon />}
+                color="#6366f1"
+                icon={<FolderIcon fontSize="small" />}
               />
             </Grid>
             <Grid item xs={6} sm={3}>
@@ -147,8 +185,8 @@ export default function Dashboard() {
                 value={summary.red_projects}
                 sublabel="遅延チケット"
                 subvalue={summary.red_issues}
-                color="#d32f2f"
-                icon={<RedIcon />}
+                color="#ef4444"
+                icon={<RedIcon fontSize="small" />}
               />
             </Grid>
             <Grid item xs={6} sm={3}>
@@ -157,8 +195,8 @@ export default function Dashboard() {
                 value={summary.yellow_projects}
                 sublabel="注意チケット"
                 subvalue={summary.yellow_issues}
-                color="#ed6c02"
-                icon={<YellowIcon />}
+                color="#f59e0b"
+                icon={<YellowIcon fontSize="small" />}
               />
             </Grid>
             <Grid item xs={6} sm={3}>
@@ -167,17 +205,21 @@ export default function Dashboard() {
                 value={summary.green_projects}
                 sublabel="正常チケット"
                 subvalue={summary.green_issues}
-                color="#2e7d32"
-                icon={<GreenIcon />}
+                color="#10b981"
+                icon={<GreenIcon fontSize="small" />}
               />
             </Grid>
           </Grid>
 
           {/* Heatmap section */}
-          <Typography variant="h6" sx={{ mb: 2 }}>組織別プロジェクト状況</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            カードをクリックすると該当組織のプロジェクト一覧を表示します
-          </Typography>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="h6" fontWeight={600} color="text.primary">
+              組織別プロジェクト状況
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              カードをクリックすると該当組織のプロジェクト一覧を表示します
+            </Typography>
+          </Box>
           <OrgHeatmap roots={roots} />
         </>
       )}
