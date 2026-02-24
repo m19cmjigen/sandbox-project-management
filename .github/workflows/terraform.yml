@@ -1,0 +1,174 @@
+name: Terraform
+
+on:
+  pull_request:
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "infra/terraform/**"
+
+permissions:
+  contents: read
+  pull-requests: write  # allow posting plan output as PR comments
+  id-token: write       # required for OIDC authentication
+
+env:
+  TF_VERSION: "1.10.5"
+  AWS_REGION: "ap-northeast-1"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Lint: format check runs for all changed environments on PR
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Format Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive infra/terraform/
+
+  # ---------------------------------------------------------------------------
+  # Plan: run terraform plan on PR for each environment
+  # ---------------------------------------------------------------------------
+  plan-staging:
+    name: Plan (staging)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: lint
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: infra/terraform/environments/staging
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: infra/terraform/environments/staging
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: infra/terraform/environments/staging
+        run: |
+          terraform plan \
+            -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
+            -no-color \
+            -out=tfplan
+        continue-on-error: true
+
+      - name: Post plan to PR
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request'
+        env:
+          PLAN: "${{ steps.plan.outputs.stdout }}"
+        with:
+          script: |
+            const output = `#### Terraform Plan - staging \`${{ steps.plan.outcome }}\`
+            <details><summary>Show Plan</summary>
+
+            \`\`\`terraform
+            ${process.env.PLAN}
+            \`\`\`
+
+            </details>`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+      - name: Plan status check
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+  # ---------------------------------------------------------------------------
+  # Apply: auto-apply to staging when merged to main
+  # ---------------------------------------------------------------------------
+  apply-staging:
+    name: Apply (staging)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: infra/terraform/environments/staging
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: infra/terraform/environments/staging
+        run: |
+          terraform apply \
+            -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
+            -auto-approve
+
+  # ---------------------------------------------------------------------------
+  # Apply: manual approval required before applying to production
+  # ---------------------------------------------------------------------------
+  apply-production:
+    name: Apply (production)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: apply-staging
+    environment: production  # GitHub Environment with required reviewers
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_PRODUCTION }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: infra/terraform/environments/production
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: infra/terraform/environments/production
+        run: |
+          terraform apply \
+            -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
+            -auto-approve
