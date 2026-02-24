@@ -67,7 +67,7 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 				projects.GET("/:id", getProjectHandlerWithDB(db))
 				projects.GET("/:id/issues", listProjectIssuesHandler)
 				// admin のみ書き込み可
-				projects.PUT("/:id", auth.RequireRole("admin"), updateProjectHandler)
+				projects.PUT("/:id", auth.RequireRole("admin"), updateProjectHandlerWithDB(db))
 				// admin + project_manager が組織割り当て可能
 				projects.PUT("/:id/organization", auth.RequireRole("admin", "project_manager"), assignProjectToOrganizationHandlerWithDB(db))
 			}
@@ -81,6 +81,19 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 				users.PUT("/:id", updateUserHandlerWithDB(db))
 				users.DELETE("/:id", deleteUserHandlerWithDB(db))
 			}
+
+			// 設定管理 (admin のみ)
+			settings := protected.Group("/settings")
+			settings.Use(auth.RequireRole("admin"))
+			{
+				settings.GET("/jira", getJiraSettingsHandler(db))
+				settings.PUT("/jira", updateJiraSettingsHandler(db))
+				settings.POST("/jira/test", testJiraConnectionHandler(db))
+				settings.POST("/jira/sync", triggerSyncHandler(db))
+			}
+
+			// 同期ログ (admin のみ)
+			protected.GET("/sync-logs", auth.RequireRole("admin"), listSyncLogsHandler(db))
 
 			// チケット管理（読み取り専用）
 			issues := protected.Group("/issues")

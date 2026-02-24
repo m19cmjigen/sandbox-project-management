@@ -42,6 +42,12 @@ func New(cfg Config) *Client {
 	}
 }
 
+// Ping calls GET /rest/api/3/myself and returns nil when the credentials are valid.
+func (c *Client) Ping() error {
+	var dest map[string]interface{}
+	return c.get("/rest/api/3/myself", &dest)
+}
+
 // get performs an authenticated GET request to the given path and decodes the
 // JSON response body into dest. Retries are applied on transient errors.
 func (c *Client) get(path string, dest interface{}) error {

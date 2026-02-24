@@ -32,3 +32,15 @@ export const getUnassignedProjects = async (): Promise<ProjectListResponse> => {
 export const assignProjectOrganization = async (projectId: number, organizationId: number | null): Promise<void> => {
   await apiClient.put(`/projects/${projectId}/organization`, { organization_id: organizationId })
 }
+
+// Fetch all projects including inactive ones (admin only)
+export const getAllProjectsForAdmin = async (): Promise<ProjectListResponse> => {
+  const response = await apiClient.get<ProjectListResponse>('/projects', {
+    params: { show_inactive: true, per_page: 100 },
+  })
+  return response.data
+}
+
+export const updateProject = async (projectId: number, data: { is_active: boolean }): Promise<void> => {
+  await apiClient.put(`/projects/${projectId}`, data)
+}
