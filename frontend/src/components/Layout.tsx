@@ -1,6 +1,7 @@
 import { ReactNode, useState } from 'react'
 import {
   Box,
+  Chip,
   Drawer,
   IconButton,
   List,
@@ -8,6 +9,7 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Tooltip,
   Typography,
   useTheme,
   alpha,
@@ -20,12 +22,16 @@ import {
   BugReport as BugReportIcon,
   Settings as SettingsIcon,
   BarChart as BarChartIcon,
+  People as PeopleIcon,
+  Logout as LogoutIcon,
 } from '@mui/icons-material'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useAuthStore } from '../stores/authStore'
+import { canManageUsers } from '../utils/permissions'
 
 const drawerWidth = 220
 
-const menuItems = [
+const baseMenuItems = [
   { text: 'ダッシュボード', icon: <DashboardIcon fontSize="small" />, path: '/' },
   { text: '組織ツリー',     icon: <BusinessIcon fontSize="small" />,  path: '/organizations' },
   { text: '組織管理',      icon: <SettingsIcon fontSize="small" />,   path: '/organizations/manage' },
@@ -33,18 +39,40 @@ const menuItems = [
   { text: 'チケット',      icon: <BugReportIcon fontSize="small" />,  path: '/issues' },
 ]
 
-const SIDEBAR_BG   = '#0f172a'  // Slate-900
-const SIDEBAR_ITEM_ACTIVE = '#1e293b' // Slate-800
-const SIDEBAR_TEXT = '#94a3b8'  // Slate-400
-const SIDEBAR_TEXT_ACTIVE = '#f8fafc' // Slate-50
+const SIDEBAR_BG          = '#0f172a'  // Slate-900
+const SIDEBAR_ITEM_ACTIVE = '#1e293b'  // Slate-800
+const SIDEBAR_TEXT        = '#94a3b8'  // Slate-400
+const SIDEBAR_TEXT_ACTIVE = '#f8fafc'  // Slate-50
+
+const roleLabel: Record<string, string> = {
+  admin:           '管理者',
+  project_manager: 'PJ管理者',
+  viewer:          '閲覧者',
+}
+
+const roleColor: Record<string, 'error' | 'warning' | 'default'> = {
+  admin:           'error',
+  project_manager: 'warning',
+  viewer:          'default',
+}
 
 interface LayoutProps {
   children: ReactNode
 }
 
 function SidebarContent() {
-  const navigate = useNavigate()
-  const location = useLocation()
+  const navigate   = useNavigate()
+  const location   = useLocation()
+  const user       = useAuthStore((s) => s.user)
+  const logout     = useAuthStore((s) => s.logout)
+
+  const menuItems = [
+    ...baseMenuItems,
+    // ユーザー管理は admin のみ表示
+    ...(user && canManageUsers(user.role)
+      ? [{ text: 'ユーザー管理', icon: <PeopleIcon fontSize="small" />, path: '/users' }]
+      : []),
+  ]
 
   return (
     <Box
@@ -160,11 +188,48 @@ function SidebarContent() {
         </List>
       </Box>
 
-      {/* Footer */}
-      <Box sx={{ px: 2.5, py: 2, borderTop: '1px solid #1e293b' }}>
-        <Typography variant="caption" sx={{ color: '#334155', fontSize: '0.6875rem' }}>
-          v1.0.0
-        </Typography>
+      {/* User info + Logout footer */}
+      <Box sx={{ px: 2, py: 1.5, borderTop: '1px solid #1e293b' }}>
+        {user && (
+          <Box sx={{ mb: 1 }}>
+            <Typography
+              sx={{
+                color: SIDEBAR_TEXT_ACTIVE,
+                fontSize: '0.75rem',
+                fontWeight: 500,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {user.email}
+            </Typography>
+            <Chip
+              label={roleLabel[user.role] ?? user.role}
+              size="small"
+              color={roleColor[user.role] ?? 'default'}
+              sx={{ mt: 0.5, fontSize: '0.625rem', height: 18 }}
+            />
+          </Box>
+        )}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography variant="caption" sx={{ color: '#334155', fontSize: '0.6875rem' }}>
+            v1.0.0
+          </Typography>
+          <Tooltip title="ログアウト">
+            <IconButton
+              size="small"
+              onClick={logout}
+              sx={{
+                color: SIDEBAR_TEXT,
+                '&:hover': { color: '#f87171', bgcolor: alpha('#f87171', 0.1) },
+                p: 0.5,
+              }}
+            >
+              <LogoutIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </Box>
     </Box>
   )

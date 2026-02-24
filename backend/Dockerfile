@@ -1,7 +1,7 @@
 # マルチステージビルド
 
 # ビルドステージ
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # 必要なツールのインストール
 RUN apk add --no-cache git make

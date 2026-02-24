@@ -68,7 +68,18 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 				projects.GET("/:id/issues", listProjectIssuesHandler)
 				// admin のみ書き込み可
 				projects.PUT("/:id", auth.RequireRole("admin"), updateProjectHandler)
-				projects.PUT("/:id/organization", auth.RequireRole("admin"), assignProjectToOrganizationHandlerWithDB(db))
+				// admin + project_manager が組織割り当て可能
+				projects.PUT("/:id/organization", auth.RequireRole("admin", "project_manager"), assignProjectToOrganizationHandlerWithDB(db))
+			}
+
+			// ユーザー管理 (admin のみ)
+			users := protected.Group("/users")
+			users.Use(auth.RequireRole("admin"))
+			{
+				users.GET("", listUsersHandlerWithDB(db))
+				users.POST("", createUserHandlerWithDB(db))
+				users.PUT("/:id", updateUserHandlerWithDB(db))
+				users.DELETE("/:id", deleteUserHandlerWithDB(db))
 			}
 
 			// チケット管理（読み取り専用）
