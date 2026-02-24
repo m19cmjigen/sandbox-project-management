@@ -47,3 +47,13 @@ output "github_actions_role_arn" {
   description = "GitHub Actions deploy role ARN"
   value       = module.iam.github_actions_role_arn
 }
+
+output "aurora_cluster_endpoint" {
+  description = "Aurora cluster writer endpoint"
+  value       = module.aurora.cluster_endpoint
+}
+
+output "aurora_db_secret_arn" {
+  description = "Secrets Manager ARN for DB credentials"
+  value       = module.aurora.db_secret_arn
+}
