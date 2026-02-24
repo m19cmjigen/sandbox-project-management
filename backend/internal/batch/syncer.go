@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/jiraclient"
+	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/metrics"
 	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/normalizer"
 )
 
@@ -27,6 +28,7 @@ type Syncer struct {
 	repo        Repository
 	log         *zap.Logger
 	workerCount int
+	recorder    metrics.Recorder
 }
 
 // NewSyncer creates a new Syncer. workerCount controls the number of concurrent
@@ -35,7 +37,19 @@ func NewSyncer(jira JiraClient, repo Repository, log *zap.Logger, workerCount in
 	if workerCount <= 0 {
 		workerCount = defaultWorkerCount
 	}
-	return &Syncer{jira: jira, repo: repo, log: log, workerCount: workerCount}
+	return &Syncer{
+		jira:        jira,
+		repo:        repo,
+		log:         log,
+		workerCount: workerCount,
+		recorder:    metrics.NoopRecorder{},
+	}
+}
+
+// SetRecorder sets the metrics recorder used to emit sync metrics.
+// The default recorder is a no-op; call this to enable CloudWatch EMF output.
+func (s *Syncer) SetRecorder(r metrics.Recorder) {
+	s.recorder = r
 }
 
 // RunFullSync fetches all Jira projects and their issues, then upserts them into the DB.
@@ -63,12 +77,21 @@ func (s *Syncer) RunFullSync(ctx context.Context) error {
 		s.log.Error("failed to finish sync log", zap.Error(finishErr))
 	}
 
+	duration := time.Since(start)
 	s.log.Info("full sync finished",
 		zap.String("status", status),
 		zap.Int("projects_synced", projectsSynced),
 		zap.Int("issues_synced", issuesSynced),
-		zap.Duration("duration", time.Since(start)),
+		zap.Duration("duration", duration),
 	)
+
+	s.recorder.RecordSync(metrics.SyncResult{
+		SyncType:       "FULL",
+		Success:        syncErr == nil,
+		Duration:       duration,
+		ProjectsSynced: projectsSynced,
+		IssuesSynced:   issuesSynced,
+	})
 
 	return syncErr
 }
@@ -98,11 +121,19 @@ func (s *Syncer) RunDeltaSync(ctx context.Context) error {
 		s.log.Error("failed to finish sync log", zap.Error(finishErr))
 	}
 
+	duration := time.Since(start)
 	s.log.Info("delta sync finished",
 		zap.String("status", status),
 		zap.Int("issues_synced", issuesSynced),
-		zap.Duration("duration", time.Since(start)),
+		zap.Duration("duration", duration),
 	)
+
+	s.recorder.RecordSync(metrics.SyncResult{
+		SyncType:     "DELTA",
+		Success:      syncErr == nil,
+		Duration:     duration,
+		IssuesSynced: issuesSynced,
+	})
 
 	return syncErr
 }
