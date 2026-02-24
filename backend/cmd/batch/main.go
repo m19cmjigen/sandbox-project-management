@@ -14,6 +14,7 @@ import (
 	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/config"
 	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/jiraclient"
 	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/logger"
+	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/metrics"
 )
 
 func main() {
@@ -59,9 +60,17 @@ func run() error {
 	workerCount, _ := strconv.Atoi(getEnv("BATCH_WORKER_COUNT", "5"))
 	// BATCH_SYNC_MODE: "full"（デフォルト）または "delta"
 	syncMode := getEnv("BATCH_SYNC_MODE", "full")
+	// METRICS_NAMESPACE: CloudWatch メトリクスのネームスペース。空の場合はメトリクス送信を無効化
+	metricsNamespace := getEnv("METRICS_NAMESPACE", "")
 
 	repo := batch.NewRepository(db)
 	syncer := batch.NewSyncer(jiraClient, repo, log.Logger, workerCount)
+
+	// METRICS_NAMESPACE が設定されている場合は CloudWatch EMF でメトリクスを送信する
+	if metricsNamespace != "" {
+		syncer.SetRecorder(metrics.NewEMFRecorder(metricsNamespace, os.Stdout))
+		log.Info("metrics enabled", zap.String("namespace", metricsNamespace))
+	}
 
 	log.Info("starting batch",
 		zap.String("jira_base_url", jiraBaseURL),
