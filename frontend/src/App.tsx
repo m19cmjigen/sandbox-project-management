@@ -9,6 +9,7 @@ import Projects from './pages/Projects'
 import Issues from './pages/Issues'
 import OrganizationManagement from './pages/OrganizationManagement'
 import UserManagement from './pages/UserManagement'
+import Settings from './pages/Settings'
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
                   <Route path="/projects" element={<Projects />} />
                   <Route path="/issues" element={<Issues />} />
                   <Route path="/users" element={<UserManagement />} />
+                  <Route path="/settings" element={<Settings />} />
                 </Routes>
               </Layout>
             }

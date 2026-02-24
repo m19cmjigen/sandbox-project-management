@@ -24,10 +24,11 @@ import {
   BarChart as BarChartIcon,
   People as PeopleIcon,
   Logout as LogoutIcon,
+  Tune as TuneIcon,
 } from '@mui/icons-material'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
-import { canManageUsers } from '../utils/permissions'
+import { canManageUsers, canAccessSettings } from '../utils/permissions'
 
 const drawerWidth = 220
 
@@ -71,6 +72,10 @@ function SidebarContent() {
     // ユーザー管理は admin のみ表示
     ...(user && canManageUsers(user.role)
       ? [{ text: 'ユーザー管理', icon: <PeopleIcon fontSize="small" />, path: '/users' }]
+      : []),
+    // 設定は admin / project_manager のみ表示
+    ...(user && canAccessSettings(user.role)
+      ? [{ text: '設定', icon: <TuneIcon fontSize="small" />, path: '/settings' }]
       : []),
   ]
 

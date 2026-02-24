@@ -8,6 +8,7 @@ export interface Project {
   lead_account_id: string | null
   lead_email: string | null
   organization_id: number | null
+  is_active: boolean
   created_at: string
   updated_at: string
   red_count: number
