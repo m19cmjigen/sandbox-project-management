@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 // --- maskToken tests ---
@@ -106,7 +107,7 @@ func TestTriggerSyncHandler_AlreadyRunning(t *testing.T) {
 	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM sync_logs WHERE status = 'RUNNING'`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 
-	handler := triggerSyncHandler(db)
+	handler := triggerSyncHandler(db, zap.NewNop())
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/settings/jira/sync", nil)
@@ -114,6 +115,28 @@ func TestTriggerSyncHandler_AlreadyRunning(t *testing.T) {
 	handler(c)
 
 	assert.Equal(t, http.StatusConflict, w.Code)
+}
+
+func TestTriggerSyncHandler_NotConfigured(t *testing.T) {
+	db, mock := newTestDB(t)
+	// running count = 0
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM sync_logs WHERE status = 'RUNNING'`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	// jira_settings が未登録 → 空行を返す
+	mock.ExpectQuery(`SELECT jira_url, email, api_token FROM jira_settings`).
+		WillReturnRows(sqlmock.NewRows([]string{"jira_url", "email", "api_token"}))
+
+	handler := triggerSyncHandler(db, zap.NewNop())
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/settings/jira/sync", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Contains(t, resp["error"], "not configured")
 }
 
 // --- listSyncLogsHandler tests ---

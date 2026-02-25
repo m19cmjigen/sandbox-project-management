@@ -89,7 +89,7 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 				settings.GET("/jira", getJiraSettingsHandler(db))
 				settings.PUT("/jira", updateJiraSettingsHandler(db))
 				settings.POST("/jira/test", testJiraConnectionHandler(db))
-				settings.POST("/jira/sync", triggerSyncHandler(db))
+				settings.POST("/jira/sync", triggerSyncHandler(db, log.Logger))
 			}
 
 			// 同期ログ (admin のみ)
@@ -217,68 +217,3 @@ func readinessCheckHandler(db *sqlx.DB) gin.HandlerFunc {
 	}
 }
 
-// 以下はプレースホルダーハンドラー（実装は後続チケットで行う）
-
-func listOrganizationsHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "list organizations - not implemented yet"})
-}
-
-func getOrganizationHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "get organization - not implemented yet"})
-}
-
-func createOrganizationHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "create organization - not implemented yet"})
-}
-
-func updateOrganizationHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "update organization - not implemented yet"})
-}
-
-func deleteOrganizationHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "delete organization - not implemented yet"})
-}
-
-func getChildOrganizationsHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "get child organizations - not implemented yet"})
-}
-
-func listProjectsHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "list projects - not implemented yet"})
-}
-
-func getProjectHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "get project - not implemented yet"})
-}
-
-func updateProjectHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "update project - not implemented yet"})
-}
-
-func assignProjectToOrganizationHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "assign project to organization - not implemented yet"})
-}
-
-func listProjectIssuesHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "list project issues - not implemented yet"})
-}
-
-func listIssuesHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "list issues - not implemented yet"})
-}
-
-func getIssueHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "get issue - not implemented yet"})
-}
-
-func getDashboardSummaryHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "get dashboard summary - not implemented yet"})
-}
-
-func getOrganizationSummaryHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "get organization summary - not implemented yet"})
-}
-
-func getProjectSummaryHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "get project summary - not implemented yet"})
-}
