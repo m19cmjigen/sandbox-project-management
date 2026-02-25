@@ -41,6 +41,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    // Exclude Playwright e2e tests from Vitest discovery
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
     setupFiles: ['./src/test/setup.ts'],
     coverage: {
       provider: 'v8',

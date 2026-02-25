@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test'
-import { setupApiMocks, mockOrganizationsResponse } from '../fixtures/api-mocks'
+import { setupApiMocks, setupAuth, mockOrganizationsResponse } from '../fixtures/api-mocks'
 
 test.describe('Organization management page', () => {
   test.beforeEach(async ({ page }) => {
+    await setupAuth(page)
     await setupApiMocks(page)
 
     // Add method-aware handler for organizations endpoint
