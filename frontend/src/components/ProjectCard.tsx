@@ -59,6 +59,7 @@ export default function ProjectCard({ project }: ProjectCardProps) {
 
   return (
     <Box
+      onClick={() => navigate(`/projects/${project.id}`)}
       sx={{
         bgcolor: 'background.paper',
         borderRadius: 3,
@@ -69,6 +70,7 @@ export default function ProjectCard({ project }: ProjectCardProps) {
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        cursor: 'pointer',
         transition: 'box-shadow 0.2s, transform 0.15s',
         '&:hover': {
           boxShadow: '0 4px 12px 0 rgb(0 0 0 / 0.1)',
@@ -123,7 +125,7 @@ export default function ProjectCard({ project }: ProjectCardProps) {
           <Tooltip title="チケット一覧">
             <IconButton
               size="small"
-              onClick={() => navigate(`/issues?project_id=${project.id}`)}
+              onClick={(e) => { e.stopPropagation(); navigate(`/issues?project_id=${project.id}`) }}
               sx={{
                 p: 0.5,
                 color: 'text.secondary',
@@ -142,6 +144,7 @@ export default function ProjectCard({ project }: ProjectCardProps) {
                 href={jiraUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 sx={{
                   p: 0.5,
                   color: 'text.secondary',
