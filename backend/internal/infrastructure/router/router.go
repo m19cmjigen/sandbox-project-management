@@ -65,7 +65,7 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 			{
 				projects.GET("", listProjectsHandlerWithDB(db))
 				projects.GET("/:id", getProjectHandlerWithDB(db))
-				projects.GET("/:id/issues", listProjectIssuesHandler)
+				projects.GET("/:id/issues", listProjectIssuesHandlerWithDB(db))
 				// admin のみ書き込み可
 				projects.PUT("/:id", auth.RequireRole("admin"), updateProjectHandlerWithDB(db))
 				// admin + project_manager が組織割り当て可能
@@ -107,7 +107,7 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 			{
 				dashboard.GET("/summary", getDashboardSummaryHandlerWithDB(db))
 				dashboard.GET("/organizations/:id", getOrganizationSummaryHandlerWithDB(db))
-				dashboard.GET("/projects/:id", getProjectSummaryHandler)
+				dashboard.GET("/projects/:id", getProjectSummaryHandlerWithDB(db))
 			}
 		}
 	}
