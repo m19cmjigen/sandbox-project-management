@@ -1,5 +1,6 @@
 import type { DelayStatus } from './project'
 import type { Project } from './project'
+import type { Issue } from './issue'
 
 export interface DashboardOrg {
   id: number
@@ -29,6 +30,20 @@ export interface DashboardSummary {
 export interface OrgSummaryResponse {
   organization: DashboardOrg
   projects: Project[]
+}
+
+export interface ProjectIssueSummary {
+  red_count: number
+  yellow_count: number
+  green_count: number
+  open_count: number
+  total_count: number
+}
+
+export interface ProjectSummaryResponse {
+  project: Project
+  delayed_issues: Issue[]
+  summary: ProjectIssueSummary
 }
 
 export interface DashboardOrgNode extends DashboardOrg {
