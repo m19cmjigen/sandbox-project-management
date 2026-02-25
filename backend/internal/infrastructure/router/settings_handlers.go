@@ -1,13 +1,16 @@
 package router
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
+	"go.uber.org/zap"
 
+	"github.com/m19cmjigen/sandbox-project-management/backend/internal/batch"
 	"github.com/m19cmjigen/sandbox-project-management/backend/pkg/jiraclient"
 )
 
@@ -168,8 +171,8 @@ func testJiraConnectionHandler(db *sqlx.DB) gin.HandlerFunc {
 }
 
 // triggerSyncHandler handles POST /api/v1/settings/jira/sync.
-// Inserts a RUNNING sync_log entry and returns immediately (async execution).
-func triggerSyncHandler(db *sqlx.DB) gin.HandlerFunc {
+// Reads Jira settings from DB, constructs a Syncer, and starts a full sync asynchronously.
+func triggerSyncHandler(db *sqlx.DB, log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 既に RUNNING 状態のジョブがある場合はスキップ
 		var running int
@@ -178,32 +181,29 @@ func triggerSyncHandler(db *sqlx.DB) gin.HandlerFunc {
 			return
 		}
 
-		var logID int64
-		err := db.QueryRowx(`
-			INSERT INTO sync_logs (sync_type, status)
-			VALUES ('FULL', 'RUNNING')
-			RETURNING id`,
-		).Scan(&logID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create sync log"})
+		// Jira 設定を DB から読み込む
+		var settings jiraSettingsRow
+		if err := db.QueryRowx(`SELECT jira_url, email, api_token FROM jira_settings ORDER BY id LIMIT 1`).StructScan(&settings); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Jira settings not configured"})
 			return
 		}
 
-		// バッチ処理は非同期で実行（実際のバッチロジックは別プロセスが担当）
-		// ここではエントリを RUNNING で作成して返す
-		// TODO: バッチWorkerとの統合時にここから goroutine で呼び出す
+		client := jiraclient.New(jiraclient.Config{
+			BaseURL:  strings.TrimRight(settings.JiraURL, "/"),
+			Email:    settings.Email,
+			APIToken: settings.APIToken,
+		})
+		repo := batch.NewRepository(db)
+		syncer := batch.NewSyncer(client, repo, log, 0)
+
+		// フルシンクを非同期で実行（sync_log の管理は Syncer が担当）
 		go func() {
-			// バッチが未統合の場合はすぐに完了扱いにする（デモ用）
-			db.Exec(`
-				UPDATE sync_logs
-				SET status = 'SUCCESS', completed_at = CURRENT_TIMESTAMP, duration_seconds = 0
-				WHERE id = $1`, logID)
+			if err := syncer.RunFullSync(context.Background()); err != nil {
+				log.Error("full sync failed", zap.Error(err))
+			}
 		}()
 
-		c.JSON(http.StatusAccepted, gin.H{
-			"message": "sync started",
-			"log_id":  logID,
-		})
+		c.JSON(http.StatusAccepted, gin.H{"message": "sync started"})
 	}
 }
 
