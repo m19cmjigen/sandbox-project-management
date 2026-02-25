@@ -25,12 +25,12 @@ Testing
     - Issue Usecase (18 tests) - Issue検索、フィルタリング
     - Project Usecase (15 tests) - プロジェクト管理
     - Organization Usecase (23 tests) - 組織階層管理
-  - [ ] **ハンドラー層（API層）**: 36テストケース（進行中）
+  - [x] **ハンドラー層（API層）**: 96テストケース（完了 - 全テストPASS）
     - Auth Handler (26 tests) ✅ - 認証、ユーザー管理API
     - Dashboard Handler (10 tests) ✅ - ダッシュボードAPI
-    - Issue Handler (TODO) - IssueAPI
-    - Project Handler (TODO) - ProjectAPI
-    - Organization Handler (TODO) - OrganizationAPI
+    - Issue Handler (18 tests) ✅ - IssueAPI（フィルタリング、検索）
+    - Project Handler (21 tests) ✅ - ProjectAPI（統計、組織割り当て）
+    - Organization Handler (21 tests) ✅ - OrganizationAPI（CRUD、ツリー構造）
 - [ ] フロントエンドのユニットテスト作成
   - [ ] コンポーネント
   - [ ] ユーティリティ関数
@@ -68,6 +68,9 @@ Testing
 ### ハンドラー層HTTPテスト
 - `internal/interface/http/auth_handler_test.go` - 26テスト（認証API）
 - `internal/interface/handler/dashboard_handler_test.go` - 10テスト（ダッシュボードAPI）
+- `internal/interface/handler/issue_handler_test.go` - 18テスト（IssueAPI、フィルタリング）
+- `internal/interface/handler/project_handler_test.go` - 21テスト（ProjectAPI、統計情報）
+- `internal/interface/handler/organization_handler_test.go` - 21テスト（OrganizationAPI、ツリー構造）
 
 ### テスト特徴
 - データベース接続が利用不可の場合は自動スキップ（リポジトリ層）
@@ -88,10 +91,9 @@ make backend-coverage
 ```
 
 ## 残タスク
-1. **ハンドラー層テスト**: HTTPハンドラーのテスト（API層）
-2. **フロントエンドテスト**: Reactコンポーネントのテスト
-3. **カバレッジ目標達成**: 全体で80%以上
-4. **ユースケース層の残り3テスト修正**: GetTree, Create tests
+1. **フロントエンドテスト**: Reactコンポーネントのテスト
+2. **カバレッジ目標達成**: 全体で80%以上
+3. **ユースケース層の残り3テスト修正**: GetTree, Create tests (OrganizationUsecase)
 
 ## 依存関係
 各実装チケット
@@ -100,4 +102,4 @@ make backend-coverage
 10日（残り: 4日）
 
 ## 進捗
-完了: 70% (ドメイン層100% + リポジトリ層100% + ユースケース層96% + ハンドラー層40%)
+完了: 80% (ドメイン層100% + リポジトリ層100% + ユースケース層96% + ハンドラー層100%)
