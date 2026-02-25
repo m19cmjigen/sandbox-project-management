@@ -25,7 +25,12 @@ Testing
     - Issue Usecase (18 tests) - Issue検索、フィルタリング
     - Project Usecase (15 tests) - プロジェクト管理
     - Organization Usecase (23 tests) - 組織階層管理
-  - [ ] API層（TODO）
+  - [ ] **ハンドラー層（API層）**: 36テストケース（進行中）
+    - Auth Handler (26 tests) ✅ - 認証、ユーザー管理API
+    - Dashboard Handler (10 tests) ✅ - ダッシュボードAPI
+    - Issue Handler (TODO) - IssueAPI
+    - Project Handler (TODO) - ProjectAPI
+    - Organization Handler (TODO) - OrganizationAPI
 - [ ] フロントエンドのユニットテスト作成
   - [ ] コンポーネント
   - [ ] ユーティリティ関数
@@ -60,6 +65,10 @@ Testing
 - `internal/usecase/project_usecase_test.go` - 15テスト（プロジェクト管理）
 - `internal/usecase/organization_usecase_test.go` - 23テスト（組織階層）
 
+### ハンドラー層HTTPテスト
+- `internal/interface/http/auth_handler_test.go` - 26テスト（認証API）
+- `internal/interface/handler/dashboard_handler_test.go` - 10テスト（ダッシュボードAPI）
+
 ### テスト特徴
 - データベース接続が利用不可の場合は自動スキップ（リポジトリ層）
 - CI環境ではPostgreSQLサービスコンテナで実行
@@ -91,4 +100,4 @@ make backend-coverage
 10日（残り: 4日）
 
 ## 進捗
-完了: 60% (ドメイン層100% + リポジトリ層100% + ユースケース層96%)
+完了: 70% (ドメイン層100% + リポジトリ層100% + ユースケース層96% + ハンドラー層40%)
