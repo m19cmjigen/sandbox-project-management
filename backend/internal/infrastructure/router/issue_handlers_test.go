@@ -78,6 +78,56 @@ func TestListIssuesHandler_DefaultParams(t *testing.T) {
 	assert.Equal(t, 25, resp.Pagination.PerPage)
 }
 
+func TestListProjectIssuesHandler_InvalidID(t *testing.T) {
+	db, _ := newTestDB(t)
+	handler := listProjectIssuesHandlerWithDB(db)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects/abc/issues", nil)
+	c.Params = gin.Params{{Key: "id", Value: "abc"}}
+
+	handler(c)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "invalid project id", resp["error"])
+}
+
+func TestListProjectIssuesHandler_EmptyResult(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listProjectIssuesHandlerWithDB(db)
+
+	// COUNT query
+	mock.ExpectQuery(`SELECT COUNT\(\*\)`).
+		WithArgs(int64(1)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	// Data query
+	mock.ExpectQuery(`SELECT`).
+		WithArgs(int64(1), 25, 0).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "jira_issue_id", "jira_issue_key", "project_id",
+			"project_key", "project_name", "summary", "status",
+			"status_category", "due_date", "assignee_name", "assignee_account_id",
+			"delay_status", "priority", "issue_type",
+			"last_updated_at", "created_at", "updated_at",
+		}))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects/1/issues", nil)
+	c.Params = gin.Params{{Key: "id", Value: "1"}}
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp IssueListResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 0, resp.Pagination.Total)
+	assert.Len(t, resp.Data, 0)
+}
+
 func TestListIssuesHandler_PaginationBounds(t *testing.T) {
 	db, mock := newTestDB(t)
 	handler := listIssuesHandlerWithDB(db)

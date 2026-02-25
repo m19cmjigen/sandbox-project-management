@@ -188,6 +188,150 @@ func listIssuesHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
 	}
 }
 
+// listProjectIssuesHandlerWithDB returns a Gin handler for listing issues of a specific project.
+// It accepts the same query parameters as listIssuesHandlerWithDB, but the project_id is fixed
+// to the path parameter :id.
+func listProjectIssuesHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idStr := c.Param("id")
+		projectID, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project id"})
+			return
+		}
+
+		// --- Parse optional filter params ---
+		delayStatus := c.Query("delay_status")
+		noDueDateStr := c.Query("no_due_date")
+		statusCategory := c.Query("status_category")
+		assigneeName := c.Query("assignee_name")
+		sortParam := c.DefaultQuery("sort", "due_date")
+		orderParam := c.DefaultQuery("order", "asc")
+
+		page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+		if err != nil || page < 1 {
+			page = 1
+		}
+		perPage, err := strconv.Atoi(c.DefaultQuery("per_page", "25"))
+		if err != nil || perPage < 1 || perPage > 100 {
+			perPage = 25
+		}
+
+		// --- Build WHERE conditions (project_id is always required) ---
+		conditions := []string{"i.project_id = $1"}
+		args := []interface{}{projectID}
+		idx := 2
+
+		if delayStatus != "" {
+			conditions = append(conditions, fmt.Sprintf("i.delay_status = $%d", idx))
+			args = append(args, delayStatus)
+			idx++
+		}
+		if noDueDateStr == "true" {
+			conditions = append(conditions, "i.due_date IS NULL")
+		}
+		if statusCategory != "" {
+			conditions = append(conditions, fmt.Sprintf("i.status_category = $%d", idx))
+			args = append(args, statusCategory)
+			idx++
+		}
+		if assigneeName != "" {
+			conditions = append(conditions, fmt.Sprintf("i.assignee_name ILIKE $%d", idx))
+			args = append(args, "%"+assigneeName+"%")
+			idx++
+		}
+
+		whereClause := "WHERE " + strings.Join(conditions, " AND ")
+
+		// --- ORDER BY clause ---
+		validSortCols := map[string]string{
+			"due_date":        "i.due_date",
+			"last_updated_at": "i.last_updated_at",
+			"jira_issue_key":  "i.jira_issue_key",
+			"delay_status":    "i.delay_status",
+		}
+		sortCol, ok := validSortCols[sortParam]
+		if !ok {
+			sortCol = "i.due_date"
+		}
+		dir := "ASC"
+		if strings.ToLower(orderParam) == "desc" {
+			dir = "DESC"
+		}
+		nullsClause := ""
+		if sortParam == "due_date" && dir == "ASC" {
+			nullsClause = " NULLS LAST"
+		}
+		orderBy := fmt.Sprintf("%s %s%s", sortCol, dir, nullsClause)
+
+		// --- COUNT query ---
+		countQuery := fmt.Sprintf(`
+			SELECT COUNT(*)
+			FROM issues i
+			JOIN projects p ON i.project_id = p.id
+			%s
+		`, whereClause)
+
+		var total int
+		if err := db.QueryRowx(countQuery, args...).Scan(&total); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count issues"})
+			return
+		}
+
+		// --- Main data query ---
+		offset := (page - 1) * perPage
+		mainQuery := fmt.Sprintf(`
+			SELECT
+				i.id,
+				i.jira_issue_id,
+				i.jira_issue_key,
+				i.project_id,
+				p.key  AS project_key,
+				p.name AS project_name,
+				i.summary,
+				i.status,
+				i.status_category,
+				TO_CHAR(i.due_date, 'YYYY-MM-DD') AS due_date,
+				i.assignee_name,
+				i.assignee_account_id,
+				i.delay_status,
+				i.priority,
+				i.issue_type,
+				i.last_updated_at,
+				i.created_at,
+				i.updated_at
+			FROM issues i
+			JOIN projects p ON i.project_id = p.id
+			%s
+			ORDER BY %s
+			LIMIT $%d OFFSET $%d
+		`, whereClause, orderBy, idx, idx+1)
+
+		queryArgs := append(args, perPage, offset)
+
+		issues := make([]IssueRow, 0)
+		if err := db.Select(&issues, mainQuery, queryArgs...); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch issues"})
+			return
+		}
+
+		totalPages := int(math.Ceil(float64(total) / float64(perPage)))
+		if totalPages == 0 {
+			totalPages = 1
+		}
+
+		c.JSON(http.StatusOK, IssueListResponse{
+			Data: issues,
+			Pagination: PaginationMeta{
+				Page:       page,
+				PerPage:    perPage,
+				Total:      total,
+				TotalPages: totalPages,
+			},
+		})
+	}
+}
+
 // getIssueHandlerWithDB returns a Gin handler for fetching a single issue by ID.
 func getIssueHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {

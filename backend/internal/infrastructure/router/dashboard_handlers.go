@@ -145,6 +145,116 @@ func getDashboardSummaryHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
 	}
 }
 
+// ProjectSummaryResponse is the response body for GET /dashboard/projects/:id.
+type ProjectSummaryResponse struct {
+	Project       ProjectRow `json:"project"`
+	DelayedIssues []IssueRow `json:"delayed_issues"`
+	Summary       struct {
+		RedCount    int `json:"red_count"`
+		YellowCount int `json:"yellow_count"`
+		GreenCount  int `json:"green_count"`
+		OpenCount   int `json:"open_count"`
+		TotalCount  int `json:"total_count"`
+	} `json:"summary"`
+}
+
+// getProjectSummaryHandlerWithDB returns dashboard summary for a specific project.
+func getProjectSummaryHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project id"})
+			return
+		}
+
+		// Fetch project with aggregated issue counts
+		projectQuery := `
+			SELECT
+				p.id,
+				p.jira_project_id,
+				p.key,
+				p.name,
+				p.lead_account_id,
+				p.lead_email,
+				p.organization_id,
+				p.is_active,
+				p.created_at,
+				p.updated_at,
+				COALESCE(COUNT(CASE WHEN i.delay_status = 'RED'    THEN 1 END), 0) AS red_count,
+				COALESCE(COUNT(CASE WHEN i.delay_status = 'YELLOW' THEN 1 END), 0) AS yellow_count,
+				COALESCE(COUNT(CASE WHEN i.delay_status = 'GREEN'  THEN 1 END), 0) AS green_count,
+				COALESCE(COUNT(CASE WHEN i.status_category != 'Done' THEN 1 END), 0) AS open_count,
+				COALESCE(COUNT(i.id), 0) AS total_count
+			FROM projects p
+			LEFT JOIN issues i ON p.id = i.project_id
+			WHERE p.id = $1
+			GROUP BY p.id, p.jira_project_id, p.key, p.name, p.lead_account_id, p.lead_email,
+			         p.organization_id, p.is_active, p.created_at, p.updated_at
+		`
+		var project ProjectRow
+		if err := db.Get(&project, projectQuery, id); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
+			return
+		}
+		switch {
+		case project.RedCount > 0:
+			project.DelayStatus = "RED"
+		case project.YellowCount > 0:
+			project.DelayStatus = "YELLOW"
+		default:
+			project.DelayStatus = "GREEN"
+		}
+
+		// Fetch top delayed issues (RED and YELLOW), sorted by due_date ASC NULLS LAST
+		issuesQuery := `
+			SELECT
+				i.id,
+				i.jira_issue_id,
+				i.jira_issue_key,
+				i.project_id,
+				p.key  AS project_key,
+				p.name AS project_name,
+				i.summary,
+				i.status,
+				i.status_category,
+				TO_CHAR(i.due_date, 'YYYY-MM-DD') AS due_date,
+				i.assignee_name,
+				i.assignee_account_id,
+				i.delay_status,
+				i.priority,
+				i.issue_type,
+				i.last_updated_at,
+				i.created_at,
+				i.updated_at
+			FROM issues i
+			JOIN projects p ON i.project_id = p.id
+			WHERE i.project_id = $1
+			  AND i.delay_status IN ('RED', 'YELLOW')
+			ORDER BY
+				CASE i.delay_status WHEN 'RED' THEN 0 ELSE 1 END,
+				i.due_date ASC NULLS LAST
+			LIMIT 20
+		`
+		delayedIssues := make([]IssueRow, 0)
+		if err := db.Select(&delayedIssues, issuesQuery, id); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch delayed issues"})
+			return
+		}
+
+		var resp ProjectSummaryResponse
+		resp.Project = project
+		resp.DelayedIssues = delayedIssues
+		resp.Summary.RedCount = project.RedCount
+		resp.Summary.YellowCount = project.YellowCount
+		resp.Summary.GreenCount = project.GreenCount
+		resp.Summary.OpenCount = project.OpenCount
+		resp.Summary.TotalCount = project.TotalCount
+
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
 // OrgSummaryResponse is the response body for GET /dashboard/organizations/:id.
 type OrgSummaryResponse struct {
 	Organization DashboardOrg `json:"organization"`
