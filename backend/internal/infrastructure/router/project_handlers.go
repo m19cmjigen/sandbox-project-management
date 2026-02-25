@@ -14,21 +14,22 @@ import (
 
 // ProjectRow represents a project with aggregated issue counts.
 type ProjectRow struct {
-	ID            int64      `db:"id" json:"id"`
-	JiraProjectID string     `db:"jira_project_id" json:"jira_project_id"`
-	Key           string     `db:"key" json:"key"`
-	Name          string     `db:"name" json:"name"`
-	LeadAccountID *string    `db:"lead_account_id" json:"lead_account_id"`
-	LeadEmail     *string    `db:"lead_email" json:"lead_email"`
-	OrganizationID *int64    `db:"organization_id" json:"organization_id"`
-	CreatedAt     time.Time  `db:"created_at" json:"created_at"`
-	UpdatedAt     time.Time  `db:"updated_at" json:"updated_at"`
-	RedCount      int        `db:"red_count" json:"red_count"`
-	YellowCount   int        `db:"yellow_count" json:"yellow_count"`
-	GreenCount    int        `db:"green_count" json:"green_count"`
-	OpenCount     int        `db:"open_count" json:"open_count"`
-	TotalCount    int        `db:"total_count" json:"total_count"`
-	DelayStatus   string     `json:"delay_status"`
+	ID             int64      `db:"id"              json:"id"`
+	JiraProjectID  string     `db:"jira_project_id" json:"jira_project_id"`
+	Key            string     `db:"key"             json:"key"`
+	Name           string     `db:"name"            json:"name"`
+	LeadAccountID  *string    `db:"lead_account_id" json:"lead_account_id"`
+	LeadEmail      *string    `db:"lead_email"      json:"lead_email"`
+	OrganizationID *int64     `db:"organization_id" json:"organization_id"`
+	IsActive       bool       `db:"is_active"       json:"is_active"`
+	CreatedAt      time.Time  `db:"created_at"      json:"created_at"`
+	UpdatedAt      time.Time  `db:"updated_at"      json:"updated_at"`
+	RedCount       int        `db:"red_count"       json:"red_count"`
+	YellowCount    int        `db:"yellow_count"    json:"yellow_count"`
+	GreenCount     int        `db:"green_count"     json:"green_count"`
+	OpenCount      int        `db:"open_count"      json:"open_count"`
+	TotalCount     int        `db:"total_count"     json:"total_count"`
+	DelayStatus    string     `json:"delay_status"`
 }
 
 // PaginationMeta holds pagination metadata for list responses.
@@ -68,6 +69,12 @@ func listProjectsHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
 		var args []interface{}
 		argIdx := 1
 
+		// is_active フィルタ: デフォルトは有効プロジェクトのみ、"all" を指定で全件
+		showAll := c.Query("show_inactive") == "true"
+		if !showAll {
+			conditions = append(conditions, "p.is_active = true")
+		}
+
 		if unassigned {
 			conditions = append(conditions, "p.organization_id IS NULL")
 		} else if orgIDStr != "" {
@@ -106,6 +113,7 @@ func listProjectsHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
 				p.lead_account_id,
 				p.lead_email,
 				p.organization_id,
+				p.is_active,
 				p.created_at,
 				p.updated_at,
 				COALESCE(COUNT(CASE WHEN i.delay_status = 'RED' THEN 1 END), 0)    AS red_count,
@@ -117,7 +125,7 @@ func listProjectsHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
 			LEFT JOIN issues i ON p.id = i.project_id
 			%s
 			GROUP BY p.id, p.jira_project_id, p.key, p.name, p.lead_account_id, p.lead_email,
-			         p.organization_id, p.created_at, p.updated_at
+			         p.organization_id, p.is_active, p.created_at, p.updated_at
 		`, whereClause)
 
 		// Wrap in outer query for delay_status filtering
@@ -217,6 +225,7 @@ func getProjectHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
 				p.lead_account_id,
 				p.lead_email,
 				p.organization_id,
+				p.is_active,
 				p.created_at,
 				p.updated_at,
 				COALESCE(COUNT(CASE WHEN i.delay_status = 'RED' THEN 1 END), 0)    AS red_count,
@@ -228,7 +237,7 @@ func getProjectHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
 			LEFT JOIN issues i ON p.id = i.project_id
 			WHERE p.id = $1
 			GROUP BY p.id, p.jira_project_id, p.key, p.name, p.lead_account_id, p.lead_email,
-			         p.organization_id, p.created_at, p.updated_at
+			         p.organization_id, p.is_active, p.created_at, p.updated_at
 		`
 
 		var project ProjectRow
@@ -247,5 +256,40 @@ func getProjectHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, project)
+	}
+}
+
+// updateProjectHandlerWithDB returns a Gin handler for updating a project (is_active flag).
+func updateProjectHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project id"})
+			return
+		}
+
+		var req struct {
+			IsActive *bool `json:"is_active"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if req.IsActive == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "is_active is required"})
+			return
+		}
+
+		_, err = db.Exec(
+			`UPDATE projects SET is_active = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+			*req.IsActive, id,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update project"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "project updated"})
 	}
 }
