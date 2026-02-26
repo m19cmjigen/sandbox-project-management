@@ -156,3 +156,32 @@ func TestListIssuesHandler_PaginationBounds(t *testing.T) {
 	assert.Equal(t, 1, resp.Pagination.Page)
 	assert.Equal(t, 25, resp.Pagination.PerPage)
 }
+
+func TestListIssuesHandler_DBError(t *testing.T) {
+	db, mock := newTestDB(t)
+	mock.ExpectQuery(`SELECT COUNT`).WillReturnError(sqlmock.ErrCancelled)
+
+	handler := listIssuesHandlerWithDB(db)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/issues", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestListProjectIssuesHandler_DBError(t *testing.T) {
+	db, mock := newTestDB(t)
+	mock.ExpectQuery(`SELECT`).WillReturnError(sqlmock.ErrCancelled)
+
+	handler := listProjectIssuesHandlerWithDB(db)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects/1/issues", nil)
+	c.Params = gin.Params{{Key: "id", Value: "1"}}
+
+	handler(c)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}

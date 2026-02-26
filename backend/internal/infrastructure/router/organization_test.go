@@ -171,3 +171,17 @@ func TestGetChildOrganizationsHandler_EmptyResult(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Empty(t, resp)
 }
+
+func TestListOrganizationsHandler_DBError(t *testing.T) {
+	db, mock := newTestDB(t)
+	mock.ExpectQuery(`WITH RECURSIVE`).WillReturnError(sqlmock.ErrCancelled)
+
+	handler := listOrganizationsHandlerWithDB(db)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/organizations", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}

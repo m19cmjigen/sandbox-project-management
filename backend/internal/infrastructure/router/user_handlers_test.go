@@ -229,3 +229,38 @@ func TestDeleteUserHandler_NotFound(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
+
+func TestListUsersHandler_DBError(t *testing.T) {
+	db, mock := newTestDB(t)
+	mock.ExpectQuery(`SELECT id, email, role, is_active FROM users`).
+		WillReturnError(sqlmock.ErrCancelled)
+
+	handler := listUsersHandlerWithDB(db)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/users", nil)
+	setAdminClaims(c, 1)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestDeleteUserHandler_DeleteSuccess(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := deleteUserHandlerWithDB(db)
+
+	mock.ExpectExec(`DELETE FROM users WHERE id`).
+		WithArgs(int64(2)).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodDelete, "/users/2", nil)
+	c.Params = gin.Params{{Key: "id", Value: "2"}}
+	setAdminClaims(c, 1)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+}

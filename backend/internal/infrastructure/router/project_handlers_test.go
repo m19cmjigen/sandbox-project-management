@@ -169,3 +169,17 @@ func TestUpdateProjectHandler_Success(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, "project updated", resp["message"])
 }
+
+func TestListProjectsHandler_DBError(t *testing.T) {
+	db, mock := newTestDB(t)
+	mock.ExpectQuery(`SELECT`).WillReturnError(sqlmock.ErrCancelled)
+
+	handler := listProjectsHandlerWithDB(db)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}

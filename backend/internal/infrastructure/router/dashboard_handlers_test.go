@@ -212,3 +212,17 @@ func TestGetProjectSummaryHandler_Success(t *testing.T) {
 	assert.Len(t, resp.DelayedIssues, 1)
 	assert.Equal(t, "RED", resp.DelayedIssues[0].DelayStatus)
 }
+
+func TestGetDashboardSummaryHandler_DBError(t *testing.T) {
+	db, mock := newTestDB(t)
+	mock.ExpectQuery(`WITH project_stats`).WillReturnError(sqlmock.ErrCancelled)
+
+	handler := getDashboardSummaryHandlerWithDB(db)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/dashboard/summary", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
