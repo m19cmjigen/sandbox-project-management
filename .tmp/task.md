@@ -1,3 +1,15 @@
+# テストカバレッジ改善 Round 6
+
+## Phase 1: frontend API unit tests (新規)
+- [x] src/api/users.test.ts (getUsers/createUser/updateUser/deleteUser - 8テスト)
+- [x] src/api/organizations.test.ts (getOrganizations/getOrganization/createOrganization/updateOrganization/deleteOrganization - 8テスト)
+- [x] src/api/dashboard.test.ts (getDashboardSummary/getOrgSummary/getProjectSummary - 4テスト)
+
+## Phase 2: 確認
+- [x] npm run test -- --run → 85テスト全通過 (14 test files)
+
+---
+
 # テストカバレッジ改善 Round 5
 
 ## Phase 1: router_test.go (新規)
