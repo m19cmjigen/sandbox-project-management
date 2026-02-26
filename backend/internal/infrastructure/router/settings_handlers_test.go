@@ -100,6 +100,53 @@ func TestUpdateJiraSettingsHandler_InvalidURL(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
+func TestUpdateJiraSettingsHandler_InsertSuccess(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := updateJiraSettingsHandler(db)
+
+	// INSERT ON CONFLICT DO NOTHING RETURNING id → 新規挿入、id=1 を返す
+	mock.ExpectQuery(`INSERT INTO jira_settings`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	body := bytes.NewBufferString(`{"jira_url":"https://example.atlassian.net","email":"user@example.com","api_token":"mytoken"}`)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPut, "/settings/jira", body)
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "Jira settings saved", resp["message"])
+}
+
+func TestUpdateJiraSettingsHandler_UpdatePath(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := updateJiraSettingsHandler(db)
+
+	// INSERT ON CONFLICT DO NOTHING RETURNING id → 既存レコードあり、id=0 を返す (競合)
+	mock.ExpectQuery(`INSERT INTO jira_settings`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	// 既存レコードを UPDATE する
+	mock.ExpectExec(`UPDATE jira_settings`).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	body := bytes.NewBufferString(`{"jira_url":"https://example.atlassian.net","email":"user@example.com","api_token":"mytoken"}`)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPut, "/settings/jira", body)
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "Jira settings saved", resp["message"])
+}
+
 // --- triggerSyncHandler tests ---
 
 func TestTriggerSyncHandler_AlreadyRunning(t *testing.T) {
@@ -137,6 +184,30 @@ func TestTriggerSyncHandler_NotConfigured(t *testing.T) {
 	var resp map[string]string
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Contains(t, resp["error"], "not configured")
+}
+
+func TestTriggerSyncHandler_Success(t *testing.T) {
+	db, mock := newTestDB(t)
+	// running count = 0
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM sync_logs WHERE status = 'RUNNING'`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	// jira_settings が登録済み
+	mock.ExpectQuery(`SELECT jira_url, email, api_token FROM jira_settings`).
+		WillReturnRows(sqlmock.NewRows([]string{"jira_url", "email", "api_token"}).
+			AddRow("https://example.atlassian.net", "user@example.com", "token123"))
+
+	handler := triggerSyncHandler(db, zap.NewNop())
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/settings/jira/sync", nil)
+
+	handler(c)
+
+	// 同期は非同期で開始されるため 202 Accepted を返す
+	assert.Equal(t, http.StatusAccepted, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "sync started", resp["message"])
 }
 
 // --- listSyncLogsHandler tests ---
@@ -186,4 +257,18 @@ func TestTestJiraConnectionHandler_NotConfigured(t *testing.T) {
 	var resp map[string]string
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Contains(t, resp["error"], "not configured")
+}
+
+func TestListSyncLogsHandler_DBError(t *testing.T) {
+	db, mock := newTestDB(t)
+	mock.ExpectQuery(`SELECT id, sync_type, executed_at`).WillReturnError(sqlmock.ErrCancelled)
+
+	handler := listSyncLogsHandler(db)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/sync-logs", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }

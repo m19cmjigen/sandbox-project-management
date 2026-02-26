@@ -1,16 +1,49 @@
-# テストカバレッジ改善 Round 4
+# テストカバレッジ改善 Round 5
+
+## Phase 1: router_test.go (新規)
+- [x] TestSecurityHeadersMiddleware
+- [x] TestCORSMiddleware_Wildcard
+- [x] TestCORSMiddleware_AllowedOrigin
+- [x] TestCORSMiddleware_DisallowedOrigin
+- [x] TestCORSMiddleware_Options
+- [x] TestLoggerMiddleware_PassThrough
+- [x] TestHealthCheckHandler
+- [x] TestReadinessCheckHandler_DBUp
+- [x] TestReadinessCheckHandler_DBDown
+
+## Phase 2: settings_handlers_test.go (追記)
+- [x] TestUpdateJiraSettingsHandler_InsertSuccess
+- [x] TestUpdateJiraSettingsHandler_UpdatePath
+- [x] TestTriggerSyncHandler_Success
+- [x] TestListSyncLogsHandler_DBError
+
+## Phase 3: 各ハンドラーDBエラーパス (追記)
+- [x] TestListUsersHandler_DBError
+- [x] TestDeleteUserHandler_DeleteSuccess
+- [x] TestListProjectsHandler_DBError
+- [x] TestListOrganizationsHandler_DBError
+- [x] TestGetDashboardSummaryHandler_DBError
+- [x] TestListIssuesHandler_DBError
+- [x] TestListProjectIssuesHandler_DBError
+
+## Phase 4: 確認
+- [x] go test ./internal/infrastructure/router/... -cover → 75.0% (目標達成)
+
+---
+
+# テストカバレッジ改善 Round 4 (完了)
 
 ## Phase 1: pkg/config/config_test.go (新規)
-- [ ] TestLoad_Defaults
-- [ ] TestLoad_EnvOverrides
-- [ ] TestLoad_InvalidDBPort
-- [ ] TestGetDSN
+- [x] TestLoad_Defaults
+- [x] TestLoad_EnvOverrides
+- [x] TestLoad_InvalidDBPort
+- [x] TestGetDSN
 
 ## Phase 2: pkg/logger/logger_test.go (新規)
-- [ ] TestNew_JSONFormat
-- [ ] TestNew_TextFormat
-- [ ] TestNew_InvalidLevel
-- [ ] TestWithFields
+- [x] TestNew_JSONFormat
+- [x] TestNew_TextFormat
+- [x] TestNew_InvalidLevel
+- [x] TestWithFields
 
 ## Phase 3: frontend api/auth.test.ts (新規)
 - [x] login 成功
