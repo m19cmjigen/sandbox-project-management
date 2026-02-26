@@ -168,10 +168,35 @@ export const mockOrganizationsResponse = [
   },
 ]
 
+// ---- Auth helpers ----
+
+/**
+ * Inject a mock admin user into localStorage so ProtectedRoute passes without
+ * going through the actual login flow.
+ * Must be called before page.goto() to take effect on the initial navigation.
+ */
+export async function setupAuth(page: Page): Promise<void> {
+  // Zustand persist stores state as { state: {...}, version: 0 } under the key "auth-storage"
+  await page.addInitScript(() => {
+    const authState = {
+      state: {
+        token: 'mock-token-for-e2e',
+        user: { id: 1, email: 'admin@example.com', role: 'admin' },
+      },
+      version: 0,
+    }
+    localStorage.setItem('auth-storage', JSON.stringify(authState))
+  })
+}
+
 // ---- Route setup helpers ----
 
 /** Intercept all /api/v1/* requests and return appropriate mock responses. */
 export async function setupApiMocks(page: Page): Promise<void> {
+  // Mock the /auth/me endpoint so the app doesn't attempt a real token validation
+  await page.route('**/api/v1/auth/me', (route: Route) =>
+    route.fulfill({ json: { id: 1, email: 'admin@example.com', role: 'admin' } }),
+  )
   await page.route('**/api/v1/dashboard/summary', (route: Route) =>
     route.fulfill({ json: mockDashboardSummary }),
   )
