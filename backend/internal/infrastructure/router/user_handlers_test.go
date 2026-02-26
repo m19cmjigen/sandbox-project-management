@@ -160,6 +160,56 @@ func TestDeleteUserHandler_InvalidID(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
+func TestCreateUserHandler_Success(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := createUserHandlerWithDB(db)
+
+	mock.ExpectQuery(`INSERT INTO users`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "email", "role", "is_active"}).
+			AddRow(3, "new@example.com", "viewer", true))
+
+	body := bytes.NewBufferString(`{"email":"new@example.com","password":"Password1!","role":"viewer"}`)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/users", body)
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler(c)
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+	var resp userListItem
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "new@example.com", resp.Email)
+	assert.Equal(t, "viewer", resp.Role)
+}
+
+func TestUpdateUserHandler_Success(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := updateUserHandlerWithDB(db)
+
+	mock.ExpectExec(`UPDATE users`).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectQuery(`SELECT id, email, role, is_active FROM users`).
+		WithArgs(int64(2)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "email", "role", "is_active"}).
+			AddRow(2, "viewer@example.com", "project_manager", true))
+
+	newRole := "project_manager"
+	body, _ := json.Marshal(updateUserRequest{Role: &newRole})
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPut, "/users/2", bytes.NewBuffer(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Params = gin.Params{{Key: "id", Value: "2"}}
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp userListItem
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "project_manager", resp.Role)
+}
+
 func TestDeleteUserHandler_NotFound(t *testing.T) {
 	db, mock := newTestDB(t)
 	handler := deleteUserHandlerWithDB(db)
