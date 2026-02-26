@@ -164,3 +164,26 @@ func TestListSyncLogsHandler_ReturnsList(t *testing.T) {
 	assert.Len(t, resp["data"], 1)
 	assert.Equal(t, "FULL", resp["data"][0].SyncType)
 }
+
+// --- testJiraConnectionHandler tests ---
+
+func TestTestJiraConnectionHandler_NotConfigured(t *testing.T) {
+	db, mock := newTestDB(t)
+
+	// Empty request body → handler falls back to DB; DB returns no rows
+	mock.ExpectQuery(`SELECT jira_url, email, api_token FROM jira_settings`).
+		WillReturnRows(sqlmock.NewRows([]string{"jira_url", "email", "api_token"}))
+
+	handler := testJiraConnectionHandler(db)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/settings/jira/test", bytes.NewBufferString(`{}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler(c)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Contains(t, resp["error"], "not configured")
+}
