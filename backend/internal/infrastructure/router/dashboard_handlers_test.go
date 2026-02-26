@@ -13,6 +13,116 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// --- getDashboardSummaryHandlerWithDB tests ---
+
+func TestGetDashboardSummaryHandler_Success(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := getDashboardSummaryHandlerWithDB(db)
+
+	// 1st query: project counts (CTE + COUNT)
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows([]string{"total", "red", "yellow", "green"}).
+			AddRow(10, 3, 2, 5))
+
+	// 2nd query: issue counts
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows([]string{"total", "red", "yellow", "green"}).
+			AddRow(80, 15, 10, 55))
+
+	// 3rd query: per-org stats
+	orgStatsCols := []string{"id", "name", "parent_id", "level", "total_projects", "red_projects", "yellow_projects", "green_projects", "delay_status"}
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(orgStatsCols).
+			AddRow(1, "開発本部", nil, 0, 6, 2, 1, 3, "RED"))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/dashboard/summary", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp DashboardSummaryResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 10, resp.TotalProjects)
+	assert.Equal(t, 3, resp.RedProjects)
+	assert.Len(t, resp.Organizations, 1)
+	assert.Equal(t, "開発本部", resp.Organizations[0].Name)
+}
+
+// --- getOrganizationSummaryHandlerWithDB tests ---
+
+func TestGetOrganizationSummaryHandler_InvalidID(t *testing.T) {
+	db, _ := newTestDB(t)
+	handler := getOrganizationSummaryHandlerWithDB(db)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/dashboard/organizations/abc", nil)
+	c.Params = gin.Params{{Key: "id", Value: "abc"}}
+
+	handler(c)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestGetOrganizationSummaryHandler_NotFound(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := getOrganizationSummaryHandlerWithDB(db)
+
+	orgStatsCols := []string{"id", "name", "parent_id", "level", "total_projects", "red_projects", "yellow_projects", "green_projects", "delay_status"}
+	mock.ExpectQuery(`SELECT`).
+		WithArgs(int64(999)).
+		WillReturnRows(sqlmock.NewRows(orgStatsCols))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/dashboard/organizations/999", nil)
+	c.Params = gin.Params{{Key: "id", Value: "999"}}
+
+	handler(c)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestGetOrganizationSummaryHandler_Success(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := getOrganizationSummaryHandlerWithDB(db)
+
+	now := time.Now()
+	orgStatsCols := []string{"id", "name", "parent_id", "level", "total_projects", "red_projects", "yellow_projects", "green_projects", "delay_status"}
+	mock.ExpectQuery(`SELECT`).
+		WithArgs(int64(1)).
+		WillReturnRows(sqlmock.NewRows(orgStatsCols).
+			AddRow(1, "開発本部", nil, 0, 4, 1, 1, 2, "RED"))
+
+	projectCols := []string{
+		"id", "jira_project_id", "key", "name",
+		"lead_account_id", "lead_email", "organization_id",
+		"red_count", "yellow_count", "green_count", "open_count", "total_count",
+		"created_at", "updated_at",
+	}
+	mock.ExpectQuery(`SELECT`).
+		WithArgs(int64(1)).
+		WillReturnRows(sqlmock.NewRows(projectCols).
+			AddRow(1, "JIRA-1", "PROJ", "テストPJ", nil, nil, 1, 1, 0, 3, 4, 4, now, now))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/dashboard/organizations/1", nil)
+	c.Params = gin.Params{{Key: "id", Value: "1"}}
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	org := resp["organization"].(map[string]interface{})
+	assert.Equal(t, "開発本部", org["name"])
+}
+
+// --- getProjectSummaryHandlerWithDB tests ---
+
 func TestGetProjectSummaryHandler_InvalidID(t *testing.T) {
 	db, _ := newTestDB(t)
 	handler := getProjectSummaryHandlerWithDB(db)
