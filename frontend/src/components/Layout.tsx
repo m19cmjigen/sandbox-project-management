@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 import {
   Box,
   Chip,
@@ -28,7 +28,9 @@ import {
 } from '@mui/icons-material'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
+import { useNotificationStore } from '../stores/notificationStore'
 import { canManageUsers, canAccessSettings } from '../utils/permissions'
+import NotificationBell from './NotificationBell'
 
 const drawerWidth = 220
 
@@ -193,6 +195,11 @@ function SidebarContent() {
         </List>
       </Box>
 
+      {/* Notification bell */}
+      <Box sx={{ px: 1, py: 0.5, borderTop: '1px solid #1e293b' }}>
+        <NotificationBell />
+      </Box>
+
       {/* User info + Logout footer */}
       <Box sx={{ px: 2, py: 1.5, borderTop: '1px solid #1e293b' }}>
         {user && (
@@ -243,6 +250,12 @@ function SidebarContent() {
 export default function Layout({ children }: LayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const theme = useTheme()
+  const startPolling = useNotificationStore((s) => s.startPolling)
+
+  useEffect(() => {
+    const stopPolling = startPolling()
+    return stopPolling
+  }, [startPolling])
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>

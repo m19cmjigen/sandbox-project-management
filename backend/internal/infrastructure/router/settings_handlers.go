@@ -198,9 +198,11 @@ func triggerSyncHandler(db *sqlx.DB, log *zap.Logger) gin.HandlerFunc {
 
 		// フルシンクを非同期で実行（sync_log の管理は Syncer が担当）
 		go func() {
-			if err := syncer.RunFullSync(context.Background()); err != nil {
+			err := syncer.RunFullSync(context.Background())
+			if err != nil {
 				log.Error("full sync failed", zap.Error(err))
 			}
+			broadcastSyncNotification(db, log, err)
 		}()
 
 		c.JSON(http.StatusAccepted, gin.H{"message": "sync started"})

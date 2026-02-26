@@ -95,6 +95,15 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 			// 同期ログ (admin のみ)
 			protected.GET("/sync-logs", auth.RequireRole("admin"), listSyncLogsHandler(db))
 
+			// 通知
+			notifications := protected.Group("/notifications")
+			{
+				notifications.GET("", listNotificationsHandlerWithDB(db))
+				// /read-all を /:id/read より先に登録（Ginのルーティング優先順位）
+				notifications.PUT("/read-all", readAllNotificationsHandlerWithDB(db))
+				notifications.PUT("/:id/read", readNotificationHandlerWithDB(db))
+			}
+
 			// チケット管理（読み取り専用）
 			issues := protected.Group("/issues")
 			{
