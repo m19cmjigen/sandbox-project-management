@@ -1,31 +1,31 @@
-# テストカバレッジ改善 Round 2
+# テストカバレッジ改善 Round 3
 
-## Phase 1: management_test.go (追記)
-- [x] TestCreateOrganizationHandler_ParentNotFound
-- [x] TestCreateOrganizationHandler_MaxDepthExceeded
-- [x] TestCreateOrganizationHandler_Success (no parent)
-- [x] TestCreateOrganizationHandler_SuccessWithParent
-- [x] TestUpdateOrganizationHandler_NotFound
-- [x] TestUpdateOrganizationHandler_Success
-- [x] TestDeleteOrganizationHandler_NotFound
-- [x] TestDeleteOrganizationHandler_Success
-- [x] TestAssignProjectHandler_OrgNotFound
-- [x] TestAssignProjectHandler_ProjectNotFound
-- [x] TestAssignProjectHandler_Success
-- [x] TestAssignProjectHandler_SuccessNullOrg
+## Phase 1: pkg/auth/middleware_test.go (新規)
+- [x] TestGetClaims_NotSet
+- [x] TestGetClaims_Set
+- [x] TestMiddleware_MissingHeader
+- [x] TestMiddleware_BadFormat
+- [x] TestMiddleware_InvalidToken
+- [x] TestMiddleware_ExpiredToken
+- [x] TestMiddleware_ValidToken
+- [x] TestRequireRole_NoClaims
+- [x] TestRequireRole_WrongRole
+- [x] TestRequireRole_AllowedRole
 
-## Phase 2: project_handlers_test.go (追記)
-- [x] TestUpdateProjectHandler_InvalidID
-- [x] TestUpdateProjectHandler_MissingIsActive
-- [x] TestUpdateProjectHandler_Success
+## Phase 2: internal/batch/repository_test.go (新規)
+- [x] TestUpsertProjects_Empty
+- [x] TestUpsertProjects_Success
+- [x] TestUpsertIssues_Empty
+- [x] TestUpsertIssues_UnknownProject
+- [x] TestUpsertIssues_Success
+- [x] TestGetProjectIDMap_Empty
+- [x] TestGetProjectIDMap_WithRows
+- [x] TestStartSyncLog_Success
+- [x] TestGetLastSuccessfulSyncTime_NoRows
+- [x] TestGetLastSuccessfulSyncTime_WithRow
+- [x] TestFinishSyncLog_Success
+- [x] TestFinishSyncLog_WithErrorMessage
 
-## Phase 3: settings_handlers_test.go (追記)
-- [x] TestTestJiraConnectionHandler_NotConfigured
-
-## Phase 4: frontend tests (新規)
-- [x] src/utils/permissions.test.ts (全4関数: 12テスト)
-- [x] src/stores/authStore.test.ts (login/logout/isAuthenticated: 6テスト)
-
-## Phase 5: 確認
-- [x] go test ./internal/infrastructure/router/... -cover → 65.6% (目標65%達成)
-- [x] npm run test -- --run → 63テスト全通過
+## Phase 3: 確認
+- [x] go test ./pkg/auth/... -cover → 93.2% (目標80%達成)
+- [x] go test ./internal/batch/... -cover → 89.8% (目標75%達成)
