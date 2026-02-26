@@ -1,6 +1,7 @@
 package router
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -108,4 +109,63 @@ func TestGetProjectHandler_Success(t *testing.T) {
 	assert.Equal(t, "PROJ", resp.Key)
 	assert.Equal(t, "RED", resp.DelayStatus)
 	assert.Equal(t, 2, resp.RedCount)
+}
+
+// --- updateProjectHandlerWithDB tests ---
+
+func TestUpdateProjectHandler_InvalidID(t *testing.T) {
+	db, _ := newTestDB(t)
+	handler := updateProjectHandlerWithDB(db)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPut, "/projects/abc", bytes.NewBufferString(`{"is_active":true}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Params = gin.Params{{Key: "id", Value: "abc"}}
+
+	handler(c)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "invalid project id", resp["error"])
+}
+
+func TestUpdateProjectHandler_MissingIsActive(t *testing.T) {
+	db, _ := newTestDB(t)
+	handler := updateProjectHandlerWithDB(db)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPut, "/projects/1", bytes.NewBufferString(`{}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Params = gin.Params{{Key: "id", Value: "1"}}
+
+	handler(c)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "is_active is required", resp["error"])
+}
+
+func TestUpdateProjectHandler_Success(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := updateProjectHandlerWithDB(db)
+
+	mock.ExpectExec(`UPDATE projects SET is_active`).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPut, "/projects/1", bytes.NewBufferString(`{"is_active":false}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Params = gin.Params{{Key: "id", Value: "1"}}
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "project updated", resp["message"])
 }
