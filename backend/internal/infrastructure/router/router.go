@@ -79,6 +79,7 @@ func NewRouter(cfg *config.Config, db *sqlx.DB, log *logger.Logger) *gin.Engine 
 				users.GET("", listUsersHandlerWithDB(db))
 				users.POST("", createUserHandlerWithDB(db))
 				users.PUT("/:id", updateUserHandlerWithDB(db))
+				users.PUT("/:id/password", changePasswordHandlerWithDB(db))
 				users.DELETE("/:id", deleteUserHandlerWithDB(db))
 			}
 
@@ -201,7 +202,7 @@ func CORSMiddleware(allowedOrigins string) gin.HandlerFunc {
 func healthCheckHandler(db *sqlx.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"status": "ok",
+			"status":  "ok",
 			"service": "project-visualization-api",
 		})
 	}
@@ -220,9 +221,8 @@ func readinessCheckHandler(db *sqlx.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"status": "ready",
+			"status":   "ready",
 			"database": "connected",
 		})
 	}
 }
-
