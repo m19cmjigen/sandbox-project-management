@@ -28,6 +28,10 @@ type updateUserRequest struct {
 	IsActive *bool   `json:"is_active"`
 }
 
+type changePasswordRequest struct {
+	NewPassword string `json:"new_password" binding:"required,min=8"`
+}
+
 // listUsersHandlerWithDB handles GET /api/v1/users.
 // Returns a list of all users (admin only).
 func listUsersHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
@@ -125,6 +129,42 @@ func updateUserHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, updated)
+	}
+}
+
+// changePasswordHandlerWithDB handles PUT /api/v1/users/:id/password.
+// Resets the password for the specified user (admin only). Current password is not required.
+func changePasswordHandlerWithDB(db *sqlx.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+			return
+		}
+		var req changePasswordRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		hash, err := auth.HashPassword(req.NewPassword)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
+			return
+		}
+		result, err := db.Exec(
+			`UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+			hash, id,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update password"})
+			return
+		}
+		rows, _ := result.RowsAffected()
+		if rows == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "password updated"})
 	}
 }
 
