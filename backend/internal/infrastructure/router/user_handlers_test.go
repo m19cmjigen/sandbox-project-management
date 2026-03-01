@@ -264,3 +264,112 @@ func TestDeleteUserHandler_DeleteSuccess(t *testing.T) {
 
 	assert.Equal(t, http.StatusNoContent, w.Code)
 }
+
+// --- changePasswordHandlerWithDB tests ---
+
+func TestChangePasswordHandler_Success(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := changePasswordHandlerWithDB(db)
+
+	// パスワードハッシュ更新が1行に影響する
+	mock.ExpectExec(`UPDATE users SET password_hash`).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	body := bytes.NewBufferString(`{"new_password":"newpass123"}`)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPut, "/users/2/password", body)
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Params = gin.Params{{Key: "id", Value: "2"}}
+	setAdminClaims(c, 1)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "password updated", resp["message"])
+}
+
+func TestChangePasswordHandler_InvalidID(t *testing.T) {
+	db, _ := newTestDB(t)
+	handler := changePasswordHandlerWithDB(db)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPut, "/users/abc/password", bytes.NewBufferString(`{"new_password":"newpass123"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Params = gin.Params{{Key: "id", Value: "abc"}}
+	setAdminClaims(c, 1)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "invalid user id", resp["error"])
+}
+
+func TestChangePasswordHandler_TooShort(t *testing.T) {
+	db, _ := newTestDB(t)
+	handler := changePasswordHandlerWithDB(db)
+
+	body := bytes.NewBufferString(`{"new_password":"short"}`)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPut, "/users/2/password", body)
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Params = gin.Params{{Key: "id", Value: "2"}}
+	setAdminClaims(c, 1)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestChangePasswordHandler_UserNotFound(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := changePasswordHandlerWithDB(db)
+
+	// 該当ユーザーが存在しない場合は rowsAffected = 0
+	mock.ExpectExec(`UPDATE users SET password_hash`).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	body := bytes.NewBufferString(`{"new_password":"newpass123"}`)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPut, "/users/99/password", body)
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Params = gin.Params{{Key: "id", Value: "99"}}
+	setAdminClaims(c, 1)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "user not found", resp["error"])
+}
+
+func TestChangePasswordHandler_DBError(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := changePasswordHandlerWithDB(db)
+
+	mock.ExpectExec(`UPDATE users SET password_hash`).
+		WillReturnError(sqlmock.ErrCancelled)
+
+	body := bytes.NewBufferString(`{"new_password":"newpass123"}`)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPut, "/users/2/password", body)
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Params = gin.Params{{Key: "id", Value: "2"}}
+	setAdminClaims(c, 1)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "failed to update password", resp["error"])
+}

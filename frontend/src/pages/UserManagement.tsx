@@ -33,9 +33,17 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   People as PeopleIcon,
+  LockReset as LockResetIcon,
 } from '@mui/icons-material'
 import type { SelectChangeEvent } from '@mui/material'
-import { getUsers, createUser, updateUser, deleteUser, type User } from '../api/users'
+import {
+  getUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+  changePassword,
+  type User,
+} from '../api/users'
 import type { Role } from '../stores/authStore'
 import { useAuthStore } from '../stores/authStore'
 import { canManageUsers } from '../utils/permissions'
@@ -44,15 +52,15 @@ import ErrorMessage from '../components/ErrorMessage'
 import ConfirmDialog from '../components/ConfirmDialog'
 
 const roleLabel: Record<Role, string> = {
-  admin:           '管理者',
+  admin: '管理者',
   project_manager: 'PJ管理者',
-  viewer:          '閲覧者',
+  viewer: '閲覧者',
 }
 
 const roleChipColor: Record<Role, 'error' | 'warning' | 'default'> = {
-  admin:           'error',
+  admin: 'error',
   project_manager: 'warning',
-  viewer:          'default',
+  viewer: 'default',
 }
 
 // ---- Create Dialog ----
@@ -64,11 +72,11 @@ interface CreateDialogProps {
 }
 
 function CreateUserDialog({ open, onClose, onCreated }: CreateDialogProps) {
-  const [email, setEmail]       = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole]         = useState<Role>('viewer')
-  const [saving, setSaving]     = useState(false)
-  const [error, setError]       = useState<string | null>(null)
+  const [role, setRole] = useState<Role>('viewer')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleClose = () => {
     setEmail('')
@@ -96,7 +104,11 @@ function CreateUserDialog({ open, onClose, onCreated }: CreateDialogProps) {
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
       <DialogTitle>ユーザー作成</DialogTitle>
       <DialogContent>
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
         <TextField
           label="メールアドレス"
           type="email"
@@ -130,11 +142,7 @@ function CreateUserDialog({ open, onClose, onCreated }: CreateDialogProps) {
       </DialogContent>
       <DialogActions>
         <Button onClick={handleClose}>キャンセル</Button>
-        <Button
-          onClick={handleSubmit}
-          variant="contained"
-          disabled={saving || !email || !password}
-        >
+        <Button onClick={handleSubmit} variant="contained" disabled={saving || !email || !password}>
           {saving ? '作成中...' : '作成'}
         </Button>
       </DialogActions>
@@ -151,10 +159,10 @@ interface EditDialogProps {
 }
 
 function EditUserDialog({ user, onClose, onUpdated }: EditDialogProps) {
-  const [role, setRole]         = useState<Role>('viewer')
+  const [role, setRole] = useState<Role>('viewer')
   const [isActive, setIsActive] = useState(true)
-  const [saving, setSaving]     = useState(false)
-  const [error, setError]       = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // ダイアログが開いたときにユーザー情報をセット
   useEffect(() => {
@@ -184,7 +192,11 @@ function EditUserDialog({ user, onClose, onUpdated }: EditDialogProps) {
     <Dialog open={user !== null} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>ユーザー編集</DialogTitle>
       <DialogContent>
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2, mt: 1 }}>
           {user?.email}
         </Typography>
@@ -201,12 +213,7 @@ function EditUserDialog({ user, onClose, onUpdated }: EditDialogProps) {
           </Select>
         </FormControl>
         <FormControlLabel
-          control={
-            <Switch
-              checked={isActive}
-              onChange={(e) => setIsActive(e.target.checked)}
-            />
-          }
+          control={<Switch checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />}
           label="アクティブ"
         />
       </DialogContent>
@@ -220,10 +227,107 @@ function EditUserDialog({ user, onClose, onUpdated }: EditDialogProps) {
   )
 }
 
+// ---- Change Password Dialog ----
+
+interface ChangePasswordDialogProps {
+  user: User | null
+  onClose: () => void
+  onDone: () => void
+}
+
+function ChangePasswordDialog({ user, onClose, onDone }: ChangePasswordDialogProps) {
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // ダイアログが開いたときに入力をリセット
+  useEffect(() => {
+    if (user) {
+      setNewPassword('')
+      setConfirmPassword('')
+      setError(null)
+    }
+  }, [user])
+
+  const handleClose = () => {
+    setNewPassword('')
+    setConfirmPassword('')
+    setError(null)
+    onClose()
+  }
+
+  const handleSubmit = async () => {
+    if (!user) return
+    if (newPassword.length < 8) {
+      setError('パスワードは8文字以上で入力してください。')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError('パスワードが一致しません。')
+      return
+    }
+    setError(null)
+    setSaving(true)
+    try {
+      await changePassword(user.id, newPassword)
+      handleClose()
+      onDone()
+    } catch {
+      setError('パスワードの変更に失敗しました。')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={user !== null} onClose={handleClose} maxWidth="sm" fullWidth>
+      <DialogTitle>パスワード変更</DialogTitle>
+      <DialogContent>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, mt: 1 }}>
+          {user?.email}
+        </Typography>
+        <TextField
+          label="新しいパスワード (8文字以上)"
+          type="password"
+          fullWidth
+          required
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          sx={{ mb: 2 }}
+        />
+        <TextField
+          label="新しいパスワード (確認)"
+          type="password"
+          fullWidth
+          required
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={handleClose}>キャンセル</Button>
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
+          disabled={saving || !newPassword || !confirmPassword}
+        >
+          {saving ? '変更中...' : '変更'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
+
 // ---- Main Page ----
 
 export default function UserManagement() {
-  const navigate    = useNavigate()
+  const navigate = useNavigate()
   const currentUser = useAuthStore((s) => s.user)
 
   // admin 以外はダッシュボードにリダイレクト
@@ -233,12 +337,13 @@ export default function UserManagement() {
     }
   }, [currentUser, navigate])
 
-  const [users, setUsers]                     = useState<User[]>([])
-  const [loading, setLoading]                 = useState(true)
-  const [error, setError]                     = useState<string | null>(null)
-  const [createOpen, setCreateOpen]           = useState(false)
-  const [editTarget, setEditTarget]           = useState<User | null>(null)
-  const [deleteTarget, setDeleteTarget]       = useState<User | null>(null)
+  const [users, setUsers] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState<User | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null)
+  const [passwordTarget, setPasswordTarget] = useState<User | null>(null)
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
@@ -270,25 +375,27 @@ export default function UserManagement() {
   }
 
   if (loading) return <LoadingSpinner />
-  if (error)   return <ErrorMessage message={error} onRetry={fetchUsers} />
+  if (error) return <ErrorMessage message={error} onRetry={fetchUsers} />
 
   return (
     <Box>
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
         <Stack direction="row" alignItems="center" spacing={1}>
           <PeopleIcon color="primary" />
-          <Typography variant="h5" fontWeight={700}>ユーザー管理</Typography>
+          <Typography variant="h5" fontWeight={700}>
+            ユーザー管理
+          </Typography>
         </Stack>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setCreateOpen(true)}
-        >
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
           ユーザー作成
         </Button>
       </Stack>
 
-      <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
+      <TableContainer
+        component={Paper}
+        elevation={0}
+        sx={{ border: '1px solid', borderColor: 'divider' }}
+      >
         <Table>
           <TableHead>
             <TableRow>
@@ -324,6 +431,11 @@ export default function UserManagement() {
                   <Tooltip title="編集">
                     <IconButton size="small" onClick={() => setEditTarget(u)}>
                       <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="パスワード変更">
+                    <IconButton size="small" onClick={() => setPasswordTarget(u)}>
+                      <LockResetIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
                   <Tooltip title={u.id === currentUser?.id ? '自分自身は削除できません' : '削除'}>
@@ -363,6 +475,12 @@ export default function UserManagement() {
         user={editTarget}
         onClose={() => setEditTarget(null)}
         onUpdated={fetchUsers}
+      />
+
+      <ChangePasswordDialog
+        user={passwordTarget}
+        onClose={() => setPasswordTarget(null)}
+        onDone={fetchUsers}
       />
 
       <ConfirmDialog
