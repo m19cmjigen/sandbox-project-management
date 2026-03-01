@@ -1,124 +1,35 @@
-# 通知機能 実装設計
+# DB-004: シードデータの作成 設計書
 
 ## 概要
 
-インアプリ通知センターを追加し、Jira同期の完了・失敗イベントをリアルタイムにユーザーへ通知する。
+開発・テスト用のシードデータを作成する。
+組織階層・プロジェクト・チケット（RED/YELLOW/GREEN混在）・同期ログを投入する。
 
-## 要件
+## 作成するファイル
 
-- 通知の種類: インアプリのみ（メール・Slack対象外）
-- 通知トリガー: Jira同期完了（成功・失敗）
-- 受信者: 全アクティブユーザー（ブロードキャスト）
-- UI: サイドバーにベルアイコン + 未読バッジ + 通知パネル（Popover）
+| ファイル | 内容 |
+|---------|-----|
+| `database/seeds/seed.sql` | シードデータSQL本体 |
+| `database/seeds/apply.sh` | 実行シェルスクリプト |
+| `Makefile` | `db-seed` ターゲット追加 |
+| `tickets/DB-004_seed-data-creation.md` | 完了マーク追加 |
 
-## アーキテクチャ
+## データ設計
 
-### DB
-- notifications テーブル（マイグレーション: 000005）
-- user_id → users(id) ON DELETE CASCADE
-- type: SYNC_COMPLETED | SYNC_FAILED
-- is_read: 既読フラグ（デフォルトFALSE）
-- 部分インデックス: notifications_user_unread ON (user_id, is_read) WHERE is_read = FALSE
+### Organizations (3階層)
+- level 0 (本部): 技術本部, 営業本部, 管理本部
+- level 1 (部): 開発部, インフラ部, 営業推進部, 人事部
+- level 2 (課): Webシステム課, モバイル開発課, クラウド基盤課, 営業企画課, 人事企画課
 
-### Backend
-- GET /api/v1/notifications → 自分の通知一覧（未読優先、最大50件）
-- PUT /api/v1/notifications/read-all → 全通知既読化
-- PUT /api/v1/notifications/:id/read → 特定通知既読化
-- triggerSyncHandler のゴルーチン末尾で broadcastSyncNotification を呼び出し
+### Projects (6件)
+- 5件: 各課に紐付け
+- 1件: 未分類（organization_id = NULL）
 
-### Frontend
-- Zustand store: useNotificationStore（persist なし）
-- 30秒間隔ポーリング（Layout.tsx の useEffect で管理）
-- NotificationBell: MUI Badge + Popover
-- NotificationPanel: 通知一覧 (max-height: 400px)
+### Issues (約50件)
+遅延ステータスはトリガーが自動計算（CURRENT_DATE基準）:
+- RED: status_category != 'Done' AND due_date < CURRENT_DATE
+- YELLOW: status_category != 'Done' AND due_date <= CURRENT_DATE+3 または due_date IS NULL
+- GREEN: 完了済み または 十分余裕のある期限
 
----
-
-# テストカバレッジ改善 Round 2 (追記)
-
-## Round 2 対象
-
-### Backend (router package) - 残りの低カバレッジハンドラー
-| ハンドラー | 現在のカバレッジ | 追加するテスト |
-|------------|---------------|--------------|
-| createOrganizationHandlerWithDB | 23.1% | success(parent有/無), ParentNotFound, MaxDepth |
-| updateOrganizationHandlerWithDB | 35.7% | NotFound, Success |
-| deleteOrganizationHandlerWithDB | 55.2% | NotFound, Success |
-| assignProjectToOrganizationHandlerWithDB | 25.0% | OrgNotFound, ProjectNotFound, Success, NullOrg |
-| updateProjectHandlerWithDB | 0% | InvalidID, MissingIsActive, Success |
-| testJiraConnectionHandler | 0% | NotConfigured |
-
-### Frontend
-| ファイル | 現状 | 追加するテスト |
-|----------|------|--------------|
-| `src/utils/permissions.ts` | テストなし | 全4関数の全ロール組み合わせ |
-| `src/stores/authStore.ts` | テストなし | login/logout/isAuthenticated |
-
----
-
-# routerパッケージ テストカバレッジ改善 (Round 1)
-
-## 現状
-`go test ./internal/infrastructure/router/... -cover` の結果: **32.3%**
-
-0%カバレッジのハンドラーが多数ある:
-- `loginHandler` / `meHandler` (auth_handlers.go)
-- `getDashboardSummaryHandlerWithDB` / `getOrganizationSummaryHandlerWithDB`
-- `listOrganizationsHandlerWithDB` / `getOrganizationHandlerWithDB` / `getChildOrganizationsHandlerWithDB`
-- `listProjectsHandlerWithDB` / `getProjectHandlerWithDB` / `updateProjectHandlerWithDB`
-
-また成功パスのテストが不足しているハンドラー:
-- `createUserHandlerWithDB` (33.3%)
-- `updateUserHandlerWithDB` (52.0%)
-
-## 追加するテストファイル
-
-### auth_handlers_test.go (新規)
-| テスト名 | 期待コード |
-|---------|-----------|
-| TestLoginHandler_MissingFields | 400 |
-| TestLoginHandler_ShortPassword | 401 |
-| TestLoginHandler_UserNotFound | 401 |
-| TestLoginHandler_DisabledAccount | 401 |
-| TestLoginHandler_WrongPassword | 401 |
-| TestLoginHandler_Success | 200 |
-| TestMeHandler_NoClaims | 401 |
-| TestMeHandler_Success | 200 |
-
-### organization_test.go (追記)
-| テスト名 | 期待コード |
-|---------|-----------|
-| TestListOrganizationsHandler_EmptyResult | 200 |
-| TestListOrganizationsHandler_ReturnsList | 200 |
-| TestGetOrganizationHandler_InvalidID | 400 |
-| TestGetOrganizationHandler_NotFound | 404 |
-| TestGetOrganizationHandler_Success | 200 |
-| TestGetChildOrganizationsHandler_InvalidID | 400 |
-| TestGetChildOrganizationsHandler_EmptyResult | 200 |
-
-### dashboard_handlers_test.go (追記)
-| テスト名 | 期待コード |
-|---------|-----------|
-| TestGetDashboardSummaryHandler_Success | 200 |
-| TestGetOrganizationSummaryHandler_InvalidID | 400 |
-| TestGetOrganizationSummaryHandler_NotFound | 404 |
-| TestGetOrganizationSummaryHandler_Success | 200 |
-
-### user_handlers_test.go (追記)
-| テスト名 | 期待コード |
-|---------|-----------|
-| TestCreateUserHandler_Success | 201 |
-| TestUpdateUserHandler_Success | 200 |
-
-### project_handlers_test.go (新規)
-| テスト名 | 期待コード |
-|---------|-----------|
-| TestListProjectsHandler_EmptyResult | 200 |
-| TestGetProjectHandler_InvalidID | 400 |
-| TestGetProjectHandler_NotFound | 404 |
-| TestGetProjectHandler_Success | 200 |
-
-## 実装上の注意
-- `loginHandler_Success`: bcryptはMinCost(4)で高速なハッシュを生成
-- `auth.NewTokenManager("test-secret")` を使用
-- sqlmockのクエリマッチは `mock.ExpectQuery` で部分マッチ
+### Sync Logs (3件)
+- SUCCESS × 2, FAILURE × 1
