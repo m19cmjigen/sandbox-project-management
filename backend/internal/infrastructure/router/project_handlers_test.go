@@ -183,3 +183,183 @@ func TestListProjectsHandler_DBError(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
+
+func TestListProjectsHandler_WithUnassignedFilter(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listProjectsHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(projectCols))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects?unassigned=true", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListProjectsHandler_WithOrganizationIDFilter(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listProjectsHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(projectCols))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects?organization_id=2", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListProjectsHandler_WithDelayCountSort(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listProjectsHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(projectCols))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects?sort=delay_count", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListProjectsHandler_WithNameDescSort(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listProjectsHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(projectCols))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects?sort=name_desc", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListProjectsHandler_WithDelayStatusFilter(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listProjectsHandlerWithDB(db)
+
+	// delay_status=RED adds outer WHERE clause
+	mock.ExpectQuery(`SELECT COUNT`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(projectCols))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects?delay_status=RED", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListProjectsHandler_WithYellowDelayStatusFilter(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listProjectsHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(projectCols))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects?delay_status=YELLOW", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListProjectsHandler_WithGreenDelayStatusFilter(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listProjectsHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(projectCols))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects?delay_status=GREEN", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListProjectsHandler_DataSelectError(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listProjectsHandlerWithDB(db)
+
+	// COUNT succeeds; main data SELECT fails
+	mock.ExpectQuery(`SELECT COUNT`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(3))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnError(sqlmock.ErrCancelled)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "failed to fetch projects", resp["error"])
+}
+
+func TestListProjectsHandler_WithResults(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listProjectsHandlerWithDB(db)
+	now := time.Now()
+
+	mock.ExpectQuery(`SELECT COUNT`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(3))
+	rows := sqlmock.NewRows(projectCols).
+		// red_count=2 → delay_status=RED
+		AddRow(1, "J-1", "RED", "Red Project", nil, nil, nil, true, now, now, 2, 1, 0, 3, 3).
+		// red_count=0, yellow_count=1 → delay_status=YELLOW
+		AddRow(2, "J-2", "YEL", "Yellow Project", nil, nil, nil, true, now, now, 0, 1, 2, 2, 3).
+		// red_count=0, yellow_count=0 → delay_status=GREEN
+		AddRow(3, "J-3", "GRN", "Green Project", nil, nil, nil, true, now, now, 0, 0, 5, 0, 5)
+	mock.ExpectQuery(`SELECT`).WillReturnRows(rows)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp ProjectListResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Len(t, resp.Data, 3)
+	assert.Equal(t, "RED", resp.Data[0].DelayStatus)
+	assert.Equal(t, "YELLOW", resp.Data[1].DelayStatus)
+	assert.Equal(t, "GREEN", resp.Data[2].DelayStatus)
+}

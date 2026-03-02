@@ -185,3 +185,287 @@ func TestListProjectIssuesHandler_DBError(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
+
+// issueColumns lists the columns returned by issue queries.
+var issueColumns = []string{
+	"id", "jira_issue_id", "jira_issue_key", "project_id",
+	"project_key", "project_name", "summary", "status",
+	"status_category", "due_date", "assignee_name", "assignee_account_id",
+	"delay_status", "priority", "issue_type",
+	"last_updated_at", "created_at", "updated_at",
+}
+
+// --- Additional listIssuesHandlerWithDB tests ---
+
+func TestListIssuesHandler_WithProjectIDFilter(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listIssuesHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(issueColumns))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/issues?project_id=1", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp IssueListResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 0, resp.Pagination.Total)
+}
+
+func TestListIssuesHandler_WithDelayStatusFilter(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listIssuesHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(issueColumns))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/issues?delay_status=RED", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListIssuesHandler_WithNoDueDateFilter(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listIssuesHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(issueColumns))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/issues?no_due_date=true", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListIssuesHandler_WithStatusCategoryFilter(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listIssuesHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(issueColumns))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/issues?status_category=In+Progress", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListIssuesHandler_WithAssigneeNameFilter(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listIssuesHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(issueColumns))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/issues?assignee_name=Alice", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListIssuesHandler_WithDescOrderAndNonDefaultSort(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listIssuesHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(issueColumns))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/issues?sort=last_updated_at&order=desc", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListIssuesHandler_WithInvalidSortFallback(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listIssuesHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(issueColumns))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	// Invalid sort column falls back to due_date
+	c.Request = httptest.NewRequest(http.MethodGet, "/issues?sort=invalid_col", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListIssuesHandler_DataSelectError(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listIssuesHandlerWithDB(db)
+
+	// COUNT succeeds; main data SELECT fails
+	mock.ExpectQuery(`SELECT COUNT\(\*\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(10))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnError(sqlmock.ErrCancelled)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/issues", nil)
+
+	handler(c)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "failed to fetch issues", resp["error"])
+}
+
+// --- Additional listProjectIssuesHandlerWithDB tests ---
+
+func TestListProjectIssuesHandler_WithDelayStatusFilter(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listProjectIssuesHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(issueColumns))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects/1/issues?delay_status=YELLOW", nil)
+	c.Params = gin.Params{{Key: "id", Value: "1"}}
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListProjectIssuesHandler_WithNoDueDateFilter(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listProjectIssuesHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(issueColumns))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects/1/issues?no_due_date=true", nil)
+	c.Params = gin.Params{{Key: "id", Value: "1"}}
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListProjectIssuesHandler_WithStatusCategoryAndAssigneeFilters(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listProjectIssuesHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(issueColumns))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects/1/issues?status_category=Done&assignee_name=Bob", nil)
+	c.Params = gin.Params{{Key: "id", Value: "1"}}
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListProjectIssuesHandler_WithDescOrder(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listProjectIssuesHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(issueColumns))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects/1/issues?sort=delay_status&order=desc", nil)
+	c.Params = gin.Params{{Key: "id", Value: "1"}}
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListProjectIssuesHandler_WithInvalidSortFallback(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listProjectIssuesHandlerWithDB(db)
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnRows(sqlmock.NewRows(issueColumns))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	// Invalid sort column falls back to due_date
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects/1/issues?sort=not_valid", nil)
+	c.Params = gin.Params{{Key: "id", Value: "1"}}
+
+	handler(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListProjectIssuesHandler_DataSelectError(t *testing.T) {
+	db, mock := newTestDB(t)
+	handler := listProjectIssuesHandlerWithDB(db)
+
+	// COUNT succeeds; main data SELECT fails
+	mock.ExpectQuery(`SELECT COUNT\(\*\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
+	mock.ExpectQuery(`SELECT`).
+		WillReturnError(sqlmock.ErrCancelled)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/projects/1/issues", nil)
+	c.Params = gin.Params{{Key: "id", Value: "1"}}
+
+	handler(c)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "failed to fetch issues", resp["error"])
+}

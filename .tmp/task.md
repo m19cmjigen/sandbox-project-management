@@ -1,3 +1,40 @@
+# テストカバレッジ改善 TEST-001 (80%+達成)
+
+## Phase 1: issue_handlers_test.go (追記)
+- [x] TestListIssuesHandler_WithProjectIDFilter
+- [x] TestListIssuesHandler_WithDelayStatusFilter
+- [x] TestListIssuesHandler_WithNoDueDateFilter
+- [x] TestListIssuesHandler_WithStatusCategoryFilter
+- [x] TestListIssuesHandler_WithAssigneeNameFilter
+- [x] TestListIssuesHandler_WithDescOrderAndNonDefaultSort
+- [x] TestListIssuesHandler_WithInvalidSortFallback
+- [x] TestListIssuesHandler_DataSelectError
+- [x] TestListProjectIssuesHandler_WithDelayStatusFilter
+- [x] TestListProjectIssuesHandler_WithNoDueDateFilter
+- [x] TestListProjectIssuesHandler_WithStatusCategoryAndAssigneeFilters
+- [x] TestListProjectIssuesHandler_WithDescOrder
+- [x] TestListProjectIssuesHandler_WithInvalidSortFallback
+- [x] TestListProjectIssuesHandler_DataSelectError
+
+## Phase 2: project_handlers_test.go (追記)
+- [x] TestListProjectsHandler_WithUnassignedFilter
+- [x] TestListProjectsHandler_WithOrganizationIDFilter
+- [x] TestListProjectsHandler_WithDelayCountSort
+- [x] TestListProjectsHandler_WithNameDescSort
+- [x] TestListProjectsHandler_WithDelayStatusFilter (RED/YELLOW/GREEN)
+- [x] TestListProjectsHandler_DataSelectError
+- [x] TestListProjectsHandler_WithResults (delay status computation)
+
+## Phase 3: 確認
+- [x] go test ./... → 全パッケージ通過
+- [x] 全体カバレッジ 80.4% (目標80%+達成)
+  - router package: 75.2% → 81.6%
+  - listIssuesHandlerWithDB: 70.1% → 100.0%
+  - listProjectIssuesHandlerWithDB: 74.6% → 96.8%
+  - listProjectsHandlerWithDB: 71.0% → 97.1%
+
+---
+
 # 通知機能実装
 
 ## Phase 1: DBマイグレーション
