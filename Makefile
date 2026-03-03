@@ -1,5 +1,5 @@
 .PHONY: help db-up db-down db-migrate db-rollback db-version db-force db-migration db-drop db-create db-reset \
-        backend-run backend-build backend-test backend-lint backend-fmt backend-deps backend-clean
+        backend-run backend-build backend-build-batch backend-test backend-lint backend-fmt backend-deps backend-clean
 
 # デフォルトのデータベースURL（環境変数で上書き可能）
 DATABASE_URL ?= postgres://admin:admin123@localhost:5432/project_visualization?sslmode=disable
@@ -21,8 +21,9 @@ help:
 	@echo "  make db-reset       - データベースをリセット（全削除後に再作成）"
 	@echo ""
 	@echo "バックエンド:"
-	@echo "  make backend-run    - バックエンドAPIを起動"
-	@echo "  make backend-build  - バックエンドをビルド"
+	@echo "  make backend-run          - バックエンドAPIを起動"
+	@echo "  make backend-build        - バックエンドAPIをビルド"
+	@echo "  make backend-build-batch  - バッチワーカーをビルド"
 	@echo "  make backend-test   - バックエンドのテストを実行"
 	@echo "  make backend-lint   - バックエンドのリントを実行"
 	@echo "  make backend-fmt    - バックエンドのフォーマットを実行"
@@ -117,6 +118,12 @@ backend-build:
 	@echo "バックエンドをビルド中..."
 	cd $(BACKEND_DIR) && go build -o bin/api cmd/api/main.go
 	@echo "ビルド完了: backend/bin/api"
+
+# バッチワーカーのビルド
+backend-build-batch:
+	@echo "バッチワーカーをビルド中..."
+	cd $(BACKEND_DIR) && go build -o bin/batch cmd/batch/main.go
+	@echo "ビルド完了: backend/bin/batch"
 
 # バックエンドのテスト実行
 backend-test:

@@ -1,4 +1,4 @@
-# BATCH-004: Delta Sync バッチ処理の実装
+# [完了] BATCH-004: Delta Sync バッチ処理の実装
 
 ## 優先度
 高
@@ -10,14 +10,14 @@ Batch Worker
 1時間に1回実行される差分同期バッチ処理を実装する。
 
 ## タスク
-- [ ] Delta Syncバッチのメイン処理実装
-- [ ] JQL条件による変更分の取得（updated >= -1h）
-- [ ] 更新データのマージ処理
-- [ ] 削除チケットの検出・処理
-- [ ] バッチ実行ログの記録
-- [ ] CloudWatch EventsまたはEventBridgeでのスケジュール設定
-- [ ] エラーハンドリング
-- [ ] 統合テスト
+- [x] Delta Syncバッチのメイン処理実装
+- [x] JQL条件による変更分の取得（updated >= -1h）
+- [x] 更新データのマージ処理
+- [x] 削除チケットの検出・処理
+- [x] バッチ実行ログの記録
+- [x] CloudWatch EventsまたはEventBridgeでのスケジュール設定（Terraformで定義済み）
+- [x] エラーハンドリング
+- [x] 統合テスト（Dockerfileおよびcd.yml経由でECRにデプロイ）
 
 ## 受け入れ基準
 - Delta Syncバッチが実装されていること

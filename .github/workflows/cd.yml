@@ -24,6 +24,7 @@ concurrency:
 env:
   AWS_REGION: ap-northeast-1
   ECR_REPOSITORY: project-viz-api
+  ECR_REPOSITORY_BATCH: project-viz-batch
   ECS_CLUSTER: project-viz
   ECS_SERVICE_BACKEND: project-viz-api
   FRONTEND_BUCKET_STAGING: project-viz-frontend-staging
@@ -73,6 +74,23 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:staging-latest
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      # --- バッチワーカー: Docker Build & Push to ECR ---
+      - name: Build, tag, and push batch image to ECR
+        id: build-batch-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            -f ./backend/Dockerfile.batch \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY_BATCH:$IMAGE_TAG \
+            ./backend
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY_BATCH:$IMAGE_TAG \
+            $ECR_REGISTRY/$ECR_REPOSITORY_BATCH:staging-latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_BATCH:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_BATCH:staging-latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY_BATCH:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       # --- バックエンド: DBマイグレーション (ECS Run Task) ---
       - name: Run database migrations
@@ -150,6 +168,7 @@ jobs:
           echo "## Staging Deployment Complete" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Backend image**: ${{ steps.build-image.outputs.image }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Batch image**: ${{ steps.build-batch-image.outputs.image }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Frontend**: s3://${{ env.FRONTEND_BUCKET_STAGING }}/" >> $GITHUB_STEP_SUMMARY
 
   # ==========================================
@@ -191,6 +210,23 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      # --- バッチワーカー: Docker Build & Push to ECR (Production) ---
+      - name: Build, tag, and push batch image (Production)
+        id: build-batch-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            -f ./backend/Dockerfile.batch \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY_BATCH:$IMAGE_TAG \
+            ./backend
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY_BATCH:$IMAGE_TAG \
+            $ECR_REGISTRY/$ECR_REPOSITORY_BATCH:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_BATCH:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_BATCH:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY_BATCH:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       - name: Run database migrations (Production)
         run: |
@@ -264,4 +300,5 @@ jobs:
           echo "## Production Deployment Complete" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Backend image**: ${{ steps.build-image.outputs.image }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Batch image**: ${{ steps.build-batch-image.outputs.image }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Frontend**: s3://${{ env.FRONTEND_BUCKET_PRODUCTION }}/" >> $GITHUB_STEP_SUMMARY

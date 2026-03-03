@@ -1,4 +1,29 @@
-# 通知機能実装
+# バッチワーカーデプロイ対応 (BATCH-004/DEPLOY-001補完)
+
+## 背景
+Terraform ECSモジュールにはバッチ用ECRリポジトリ・タスク定義・EventBridgeが定義済み。
+しかしDockerfile.batchとcd.ymlへのバッチデプロイステップが存在しない。
+
+## Phase 1: Dockerfile.batch 作成
+- [x] backend/Dockerfile.batch 作成（cmd/batch バイナリをビルド）
+
+## Phase 2: cd.yml 更新
+- [x] ECR_REPOSITORY_BATCH 環境変数追加
+- [x] deploy-staging にバッチイメージビルド＆プッシュステップ追加
+- [x] deploy-production にバッチイメージビルド＆プッシュステップ追加
+
+## Phase 3: Makefile 更新
+- [x] backend-build-batch ターゲット追加
+
+## Phase 4: 確認・PR
+- [x] docker build -f backend/Dockerfile.batch backend/ でビルド成功確認（sha256:8e5534...）
+- [x] go build ./backend/cmd/batch/main.go でビルド成功確認
+- [x] tickets/BATCH-004 更新
+- [x] PR作成
+
+---
+
+# テストカバレッジ改善 TEST-001 (80%+達成)
 
 ## Phase 1: DBマイグレーション
 - [x] database/migrations/000005_create_notifications.up.sql 作成
