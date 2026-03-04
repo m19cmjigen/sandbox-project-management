@@ -19,12 +19,12 @@ Testing
     - Project Repository (7 tests)
     - Issue Repository (6 tests)
     - User Repository (6 tests)
-  - [x] **ユースケース層**: 96テストケース（70/73 passing = 95.9%）
-    - Auth Usecase (27 tests) - 認証、ユーザー管理、JWT
-    - Dashboard Usecase (13 tests) - ダッシュボードサマリー
-    - Issue Usecase (18 tests) - Issue検索、フィルタリング
-    - Project Usecase (15 tests) - プロジェクト管理
-    - Organization Usecase (23 tests) - 組織階層管理
+  - [x] **ユースケース層**: 108テストケース（全テストPASS - 100%）
+    - Auth Usecase (27 tests) ✅ - 認証、ユーザー管理、JWT
+    - Dashboard Usecase (13 tests) ✅ - ダッシュボードサマリー
+    - Issue Usecase (18 tests) ✅ - Issue検索、フィルタリング
+    - Project Usecase (15 tests) ✅ - プロジェクト管理
+    - Organization Usecase (35 tests) ✅ - 組織階層管理（GetTree, Create修正完了）
   - [x] **ハンドラー層（API層）**: 96テストケース（完了 - 全テストPASS）
     - Auth Handler (26 tests) ✅ - 認証、ユーザー管理API
     - Dashboard Handler (10 tests) ✅ - ダッシュボードAPI
@@ -63,7 +63,8 @@ Testing
 - `internal/usecase/dashboard_usecase_test.go` - 13テスト（サマリー、統計）
 - `internal/usecase/issue_usecase_test.go` - 18テスト（Issue操作）
 - `internal/usecase/project_usecase_test.go` - 15テスト（プロジェクト管理）
-- `internal/usecase/organization_usecase_test.go` - 23テスト（組織階層）
+- `internal/usecase/organization_usecase_test.go` - 35テスト（組織階層、GetTree/Create修正済み）
+- `internal/usecase/mocks_test.go` - 共通モック定義
 
 ### ハンドラー層HTTPテスト
 - `internal/interface/http/auth_handler_test.go` - 26テスト（認証API）
@@ -92,8 +93,7 @@ make backend-coverage
 
 ## 残タスク
 1. **フロントエンドテスト**: Reactコンポーネントのテスト
-2. **カバレッジ目標達成**: 全体で80%以上
-3. **ユースケース層の残り3テスト修正**: GetTree, Create tests (OrganizationUsecase)
+2. **カバレッジ目標達成**: 全体で80%以上（バックエンドは達成見込み）
 
 ## 依存関係
 各実装チケット
@@ -102,4 +102,4 @@ make backend-coverage
 10日（残り: 4日）
 
 ## 進捗
-完了: 80% (ドメイン層100% + リポジトリ層100% + ユースケース層96% + ハンドラー層100%)
+完了: 85% (ドメイン層100% + リポジトリ層100% + ユースケース層100% + ハンドラー層100%)
