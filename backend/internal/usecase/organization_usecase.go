@@ -69,19 +69,25 @@ func (u *organizationUsecase) GetTree(ctx context.Context) ([]domain.Organizatio
 		orgMap[org.ID] = &orgWithChildren
 	}
 
-	// ツリー構造を構築
-	var roots []domain.OrganizationWithChildren
+	// ツリー構造を構築（まず子要素を親に追加）
+	var rootIDs []int64
 	for _, org := range allOrgs {
 		if org.ParentID == nil {
-			// ルート組織
-			if orgWithChildren, ok := orgMap[org.ID]; ok {
-				roots = append(roots, *orgWithChildren)
-			}
+			// ルート組織のIDを記録
+			rootIDs = append(rootIDs, org.ID)
 		} else {
-			// 子組織
+			// 子組織を親に追加
 			if parent, ok := orgMap[*org.ParentID]; ok {
 				parent.Children = append(parent.Children, org)
 			}
+		}
+	}
+
+	// ルート組織を収集（子要素が全て追加された後）
+	var roots []domain.OrganizationWithChildren
+	for _, rootID := range rootIDs {
+		if root, ok := orgMap[rootID]; ok {
+			roots = append(roots, *root)
 		}
 	}
 

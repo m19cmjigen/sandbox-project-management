@@ -1,44 +1,23 @@
 package usecase
 
 import (
-	"github.com/stretchr/testify/mock"
 	"context"
 	"errors"
-	
 	"testing"
 
 	"github.com/m19cmjigen/sandbox-project-management/backend/internal/domain"
 	"github.com/stretchr/testify/assert"
-
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
-// MockOrganizationRepositoryForUsecase extends MockOrganizationRepository with additional methods
-type MockOrganizationRepositoryForUsecase struct {
-	MockOrganizationRepository
-}
-
-func (m *MockOrganizationRepositoryForUsecase) FindRoots(ctx context.Context) ([]domain.Organization, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]domain.Organization), args.Error(1)
-}
-
-func (m *MockOrganizationRepositoryForUsecase) HasChildren(ctx context.Context, id int64) (bool, error) {
-	args := m.Called(ctx, id)
-	return args.Bool(0), args.Error(1)
-}
-
-func setupOrganizationUsecase(t *testing.T) (*organizationUsecase, *MockOrganizationRepositoryForUsecase) {
-	mockRepo := new(MockOrganizationRepositoryForUsecase)
+func setupOrganizationUsecase(t *testing.T) (*organizationUsecase, *MockOrganizationRepository) {
+	mockRepo := new(MockOrganizationRepository)
 	usecase := &organizationUsecase{
 		orgRepo: mockRepo,
 	}
 	return usecase, mockRepo
 }
-
 
 func createTestOrganizationWithPath(id int64, name string, parentID *int64, path string, level int) *domain.Organization {
 	org := createTestOrganization(id, name)
@@ -47,6 +26,7 @@ func createTestOrganizationWithPath(id int64, name string, parentID *int64, path
 	org.Level = level
 	return org
 }
+
 // GetAll tests
 func TestOrganizationUsecase_GetAll_Success(t *testing.T) {
 	uc, mockRepo := setupOrganizationUsecase(t)
@@ -259,7 +239,7 @@ func TestOrganizationUsecase_Create_ChildOrganization(t *testing.T) {
 	ctx := context.Background()
 
 	parentID := int64(1)
-	parent := *createTestOrganizationWithPath(1, "Parent", nil, "/1/", 0)
+	parent := createTestOrganizationWithPath(1, "Parent", nil, "/1/", 0)
 
 	mockRepo.On("FindByID", ctx, int64(1)).Return(parent, nil)
 	mockRepo.On("Create", ctx, mock.MatchedBy(func(org *domain.Organization) bool {
@@ -303,7 +283,7 @@ func TestOrganizationUsecase_Update_Success(t *testing.T) {
 	uc, mockRepo := setupOrganizationUsecase(t)
 	ctx := context.Background()
 
-	existingOrg := *createTestOrganizationWithPath(1, "Old Name", nil, "/1/", 0)
+	existingOrg := createTestOrganizationWithPath(1, "Old Name", nil, "/1/", 0)
 	mockRepo.On("FindByID", ctx, int64(1)).Return(existingOrg, nil)
 	mockRepo.On("Update", ctx, mock.MatchedBy(func(org *domain.Organization) bool {
 		return org.Name == "New Name" && org.ID == 1
@@ -320,8 +300,8 @@ func TestOrganizationUsecase_Update_ChangeParent(t *testing.T) {
 	uc, mockRepo := setupOrganizationUsecase(t)
 	ctx := context.Background()
 
-	existingOrg := *createTestOrganizationWithPath(2, "Child", nil, "/2/", 0)
-	newParent := *createTestOrganizationWithPath(1, "Parent", nil, "/1/", 0)
+	existingOrg := createTestOrganizationWithPath(2, "Child", nil, "/2/", 0)
+	newParent := createTestOrganizationWithPath(1, "Parent", nil, "/1/", 0)
 	newParentID := int64(1)
 
 	mockRepo.On("FindByID", ctx, int64(2)).Return(existingOrg, nil)
@@ -343,7 +323,7 @@ func TestOrganizationUsecase_Update_SelfAsParent(t *testing.T) {
 	uc, mockRepo := setupOrganizationUsecase(t)
 	ctx := context.Background()
 
-	existingOrg := *createTestOrganizationWithPath(1, "Org", nil, "/1/", 0)
+	existingOrg := createTestOrganizationWithPath(1, "Org", nil, "/1/", 0)
 	selfID := int64(1)
 
 	mockRepo.On("FindByID", ctx, int64(1)).Return(existingOrg, nil)
@@ -361,8 +341,8 @@ func TestOrganizationUsecase_Update_CircularReference(t *testing.T) {
 	ctx := context.Background()
 
 	// Org 1 (parent of Org 2) trying to become child of Org 2
-	org1 := *createTestOrganizationWithPath(1, "Org1", nil, "/1/", 0)
-	org2 := *createTestOrganizationWithPath(2, "Org2", func() *int64 { id := int64(1); return &id }(), "/1/2/", 1)
+	org1 := createTestOrganizationWithPath(1, "Org1", nil, "/1/", 0)
+	org2 := createTestOrganizationWithPath(2, "Org2", func() *int64 { id := int64(1); return &id }(), "/1/2/", 1)
 	org2ParentID := int64(2)
 
 	mockRepo.On("FindByID", ctx, int64(1)).Return(org1, nil)
@@ -490,7 +470,7 @@ func TestOrganizationUsecase_Create_DeepNesting(t *testing.T) {
 
 	// Create at level 3
 	parentID := int64(3)
-	parent := *createTestOrganizationWithPath(3, "Level2", nil, "/1/2/3/", 2)
+	parent := createTestOrganizationWithPath(3, "Level2", nil, "/1/2/3/", 2)
 
 	mockRepo.On("FindByID", ctx, int64(3)).Return(parent, nil)
 	mockRepo.On("Create", ctx, mock.MatchedBy(func(org *domain.Organization) bool {
@@ -510,18 +490,4 @@ func TestOrganizationUsecase_Create_DeepNesting(t *testing.T) {
 	assert.Equal(t, 3, org.Level)
 	assert.Equal(t, "/1/2/3/4/", org.Path)
 	mockRepo.AssertExpectations(t)
-}
-
-// Additional methods for MockOrganizationRepositoryForUsecase
-func (m *MockOrganizationRepositoryForUsecase) ExistsByID(ctx context.Context, id int64) (bool, error) {
-	args := m.Called(ctx, id)
-	return args.Bool(0), args.Error(1)
-}
-
-func (m *MockOrganizationRepositoryForUsecase) FindByPath(ctx context.Context, pathPrefix string) ([]domain.Organization, error) {
-	args := m.Called(ctx, pathPrefix)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]domain.Organization), args.Error(1)
 }

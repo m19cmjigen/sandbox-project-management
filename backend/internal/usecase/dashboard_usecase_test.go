@@ -13,49 +13,6 @@ import (
 )
 
 // Mock implementations for dashboard tests
-type MockOrganizationRepository struct {
-	mock.Mock
-}
-
-func (m *MockOrganizationRepository) Create(ctx context.Context, org *domain.Organization) error {
-	args := m.Called(ctx, org)
-	return args.Error(0)
-}
-
-func (m *MockOrganizationRepository) FindByID(ctx context.Context, id int64) (*domain.Organization, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.Organization), args.Error(1)
-}
-
-func (m *MockOrganizationRepository) FindAll(ctx context.Context) ([]domain.Organization, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]domain.Organization), args.Error(1)
-}
-
-func (m *MockOrganizationRepository) Update(ctx context.Context, org *domain.Organization) error {
-	args := m.Called(ctx, org)
-	return args.Error(0)
-}
-
-func (m *MockOrganizationRepository) Delete(ctx context.Context, id int64) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
-}
-
-func (m *MockOrganizationRepository) FindByParentID(ctx context.Context, parentID int64) ([]domain.Organization, error) {
-	args := m.Called(ctx, parentID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]domain.Organization), args.Error(1)
-}
-
 type MockProjectRepository struct {
 	mock.Mock
 }
@@ -173,16 +130,6 @@ func (m *MockIssueRepository) BulkUpdate(ctx context.Context, issues []domain.Is
 
 
 // Test helper functions
-func createTestOrganization(id int64, name string) *domain.Organization {
-	return &domain.Organization{
-		ID:        id,
-		Name:      name,
-		ParentID:  nil,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-}
-
 func createTestProject(id int64, name string, orgID int64) *domain.Project {
 	return &domain.Project{
 		ID:             id,
@@ -453,32 +400,6 @@ func TestDashboardUsecase_GetSummary_MixedStatusProjects(t *testing.T) {
 }
 
 // Additional methods for MockOrganizationRepository  
-func (m *MockOrganizationRepository) ExistsByID(ctx context.Context, id int64) (bool, error) {
-	args := m.Called(ctx, id)
-	return args.Bool(0), args.Error(1)
-}
-
-func (m *MockOrganizationRepository) FindByPath(ctx context.Context, pathPrefix string) ([]domain.Organization, error) {
-	args := m.Called(ctx, pathPrefix)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]domain.Organization), args.Error(1)
-}
-
-func (m *MockOrganizationRepository) FindRoots(ctx context.Context) ([]domain.Organization, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]domain.Organization), args.Error(1)
-}
-
-func (m *MockOrganizationRepository) HasChildren(ctx context.Context, id int64) (bool, error) {
-	args := m.Called(ctx, id)
-	return args.Bool(0), args.Error(1)
-}
-
 // Additional methods for MockProjectRepository
 func (m *MockProjectRepository) AssignToOrganization(ctx context.Context, projectID int64, organizationID *int64) error {
 	args := m.Called(ctx, projectID, organizationID)
